@@ -24,4 +24,9 @@ final class DeliveryCompanyRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    public function findOneBySlug(string $slug): ?DeliveryCompany
+    {
+        return $this->findOneBy(['slug' => $slug]);
+    }
 }

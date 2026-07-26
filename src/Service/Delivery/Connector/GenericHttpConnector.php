@@ -203,7 +203,13 @@ final class GenericHttpConnector implements DeliveryProviderInterface
         $options = ['headers' => $headers, 'timeout' => (float) ($context->company->getParametersConfig()['timeout'] ?? 15)];
 
         if (DeliveryAuthType::Basic === $context->company->getAuthType() && !isset($headers['Authorization'])) {
-            $options['auth_basic'] = [$context->credentialValue('login') ?? '', $context->credentialValue('password') ?? ''];
+            $login = $context->credentialValue('login') ?? '';
+            $password = $context->credentialValue('password') ?? '';
+            // Some Tunisian carriers (e.g. Navex) provide a single token used as Basic auth.
+            if ('' === $login && '' === $password && null !== ($token = $context->credentialValue('token'))) {
+                $login = $token;
+            }
+            $options['auth_basic'] = [$login, $password];
         }
 
         if (null !== $body) {
