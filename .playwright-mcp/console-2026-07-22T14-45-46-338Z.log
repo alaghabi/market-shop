@@ -1,9 +1,0 @@
-[   57827ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:8082/api/suggestions?limit=20&page=1:0
-[  110558ms] [ERROR] Failed to load resource: the server responded with a status of 405 (Method Not Allowed) @ http://localhost:8082/api/admin/suggestions/019f8a4b-e1be-763c-8b31-06a8422c7cd5/publish?boutiqueId=019f8440-354b-7805-a57e-98bb8b1b373c:0
-[  110620ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8082/api/public/suggestions/019f8a4b-e1be-763c-8b31-06a8422c7cd5:0
-[  110815ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8082/api/public/suggestions/019f8a4b-e1be-763c-8b31-06a8422c7cd5:0
-[  161767ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8082/api/public/suggestions/019f8a4c-a96b-71c4-81e3-287d4ed0ff21:0
-[  161964ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8082/api/public/suggestions/019f8a4c-a96b-71c4-81e3-287d4ed0ff21:0
-[  162026ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:8082/api/admin/suggestions/019f8a4c-a96b-71c4-81e3-287d4ed0ff21/archive?boutiqueId=019f8440-354b-7805-a57e-98bb8b1b373c:0
-[  227853ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8082/api/public/suggestions/019f8a4d-ac00-743c-a6c1-71cca9e68f2f:0
-[  318486ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8082/api/public/suggestions/019f8a4f-0e41-7680-9c83-69afbe14d30b:0

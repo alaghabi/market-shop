@@ -1,2 +1,0 @@
-[   25110ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:8082/api/admin/suggestions/019f8a55-9576-7122-91d0-5caf73111383/archive?boutiqueId=019f8440-354b-7805-a57e-98bb8b1b373c:0
-[   52378ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:8082/api/admin/suggestions/019f8a55-ff84-7d37-ada9-e68361a1133e/archive?boutiqueId=019f8440-354b-7805-a57e-98bb8b1b373c:0

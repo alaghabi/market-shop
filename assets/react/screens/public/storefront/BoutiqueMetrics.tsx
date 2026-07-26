@@ -17,7 +17,7 @@ export function BoutiqueMetrics({
 
   return (
     <section className="px-4 py-10 sm:px-6 lg:px-8" aria-label="Statistiques de la boutique">
-      <div className="mx-auto grid max-w-7xl gap-4 sm:grid-cols-3">
+      <div className={`mx-auto grid max-w-7xl gap-4 ${metrics.length >= 3 ? 'sm:grid-cols-3' : metrics.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}>
         {metrics.map((metric) => (
           <div key={metric.label} className="rounded-[1.5rem] border border-[color:var(--sf-outline,#DDD6FE)] bg-white p-6">
             <div className="text-3xl font-black text-[color:var(--sf-accent,#111111)]">{metric.value.toLocaleString('fr-FR')}</div>

@@ -139,9 +139,14 @@ export function StorefrontPage({ title, description }: { title: string; descript
 
          const themeCode = data.theme ?? 'hanooti-marketplace';
          const preset = getStorefrontThemePreset(themeCode);
-         const themeData = data.theme || !preset
-           ? { ...data, theme: themeCode }
-           : { ...data, theme: themeCode, colorPalette: preset.colorPalette };
+         const themeData = {
+           ...data,
+           theme: themeCode,
+           colorPalette: {
+             ...(preset?.colorPalette ?? {}),
+             ...(data.colorPalette ?? {}),
+           },
+         };
 
          applyStorefrontTheme(themeData);
          setBoutique({
@@ -186,7 +191,7 @@ export function StorefrontPage({ title, description }: { title: string; descript
            publicOrdersCount: data.publicOrdersCount ?? 0,
          });
          if (data.wishlistEnabled === true) {
-           fetch('/api/favorites/products', { headers, credentials: 'same-origin' })
+           fetch(`/api/favorites/products${boutiqueQuery(boutiqueSlug)}`, { headers, credentials: 'same-origin' })
              .then((response) => response.ok ? response.json() : [])
               .then((payload: Array<{ productId?: string }> | { member?: Array<{ productId?: string }>; items?: Array<{ productId?: string }>; 'hydra:member'?: Array<{ productId?: string }> }) => {
                 const favorites = Array.isArray(payload) ? payload : payload.member ?? payload.items ?? payload['hydra:member'] ?? [];
@@ -245,11 +250,31 @@ export function StorefrontPage({ title, description }: { title: string; descript
     );
   }
 
+  async function refreshFavoriteIds(): Promise<void> {
+    if (!boutiqueSlug || boutique?.wishlistEnabled !== true) {
+      setFavoriteProductIds([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/favorites/products${boutiqueQuery(boutiqueSlug)}`, {
+        credentials: 'same-origin',
+        headers: authHeaders(),
+      });
+      if (!response.ok) return;
+      const payload = await response.json() as Array<{ productId?: string }> | { member?: Array<{ productId?: string }>; items?: Array<{ productId?: string }>; 'hydra:member'?: Array<{ productId?: string }> };
+      const favorites = Array.isArray(payload) ? payload : payload.member ?? payload.items ?? payload['hydra:member'] ?? [];
+      setFavoriteProductIds(favorites.map((favorite) => favorite.productId).filter((id): id is string => Boolean(id)));
+    } catch {
+      setFavoriteProductIds([]);
+    }
+  }
+
   async function toggleFavorite(productId: string): Promise<void> {
-    if (!boutique?.wishlistEnabled) return;
+    if (!boutique?.wishlistEnabled || !boutiqueSlug) return;
 
     const isFavorite = favoriteProductIds.includes(productId);
-    const response = await fetch(`/api/favorites/products/${productId}`, {
+    const response = await fetch(`/api/favorites/products/${productId}${boutiqueQuery(boutiqueSlug)}`, {
       method: isFavorite ? 'DELETE' : 'POST',
       credentials: 'same-origin',
       headers: authHeaders(),
@@ -265,7 +290,7 @@ export function StorefrontPage({ title, description }: { title: string; descript
 
   return (
     <>
-      <StorefrontTheme boutique={boutique} products={products} categories={categories} filters={filters} reviewsEnabled={boutique.reviewsEnabled === true} favoriteProductIds={favoriteProductIds} onToggleFavorite={(id) => { void toggleFavorite(id); }} />
+      <StorefrontTheme boutique={boutique} products={products} categories={categories} filters={filters} reviewsEnabled={boutique.reviewsEnabled === true} favoriteProductIds={favoriteProductIds} onToggleFavorite={(id) => { void toggleFavorite(id); }} onFavoritesRefresh={() => { void refreshFavoriteIds(); }} />
       {boutique && localStorage.getItem(`hanooti_chat_enabled_${boutique.slug}`) !== 'false' && localStorage.getItem('hanooti_boutique_chat_enabled') !== 'false' && (
         <ChatBox boutiqueId={boutique.id} apiBaseUrl="/api" primaryColor={boutique.primaryColor} />
       )}

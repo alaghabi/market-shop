@@ -148,7 +148,12 @@ export function ProductDetailPage({ title }: { title: string }) {
         if (!data) return;
 
         applyStorefrontTheme(data);
-        setBoutique({ ...data, reviewsEnabled: data.reviewsEnabled === true });
+        setBoutique({
+          ...data,
+          reviewsEnabled: data.reviewsEnabled === true,
+          wishlistEnabled: data.wishlistEnabled === true,
+          viewsEnabled: data.viewsEnabled === true,
+        });
       })
       .catch(() => {});
 
@@ -226,6 +231,7 @@ export function ProductDetailPage({ title }: { title: string }) {
     if (response.ok) {
       setIsFavorite((current) => !current);
       setFavoritesCount((current) => Math.max(0, current + (isFavorite ? -1 : 1)));
+      setTotalFavorites((current) => Math.max(0, current + (isFavorite ? -1 : 1)));
     }
   }
 
@@ -245,7 +251,7 @@ export function ProductDetailPage({ title }: { title: string }) {
   const activeVariants = product.variants.filter((variant) => variant.isActive);
   const selectedVariant = activeVariants.find((variant) => variant.id === selectedVariantId) ?? null;
   const displayPrice = selectedVariant?.sellingPrice ?? product.sellingPrice;
-  const displayComparePrice = selectedVariant?.comparePrice || product.comparePrice;
+  const displayComparePrice = selectedVariant?.comparePrice ?? product.comparePrice;
   const displayStock = selectedVariant?.quantity ?? product.stockQuantity;
   const discount = displayComparePrice && displayComparePrice > displayPrice
     ? Math.round((1 - displayPrice / displayComparePrice) * 100)
@@ -253,11 +259,17 @@ export function ProductDetailPage({ title }: { title: string }) {
 
   function selectAttribute(name: string, value: string): void {
     const nextAttributes = { ...selectedAttributes, [name]: value };
-    const matchingVariant = activeVariants.find((variant) => variant.attributes.every((attribute) => nextAttributes[attribute.name] === attribute.value));
+    const matchingVariant = activeVariants.find((variant) => (
+      variant.attributes.length === Object.keys(nextAttributes).length
+      && variant.attributes.every((attribute) => nextAttributes[attribute.name] === attribute.value)
+    ));
     setSelectedAttributes(matchingVariant
       ? Object.fromEntries(matchingVariant.attributes.map((attribute) => [attribute.name, attribute.value]))
       : nextAttributes);
-    setSelectedVariantId(matchingVariant?.id ?? selectedVariantId);
+    setSelectedVariantId(matchingVariant?.id ?? null);
+    if (matchingVariant) {
+      setQuantity((current) => Math.min(current, Math.max(1, matchingVariant.quantity)));
+    }
   }
 
   function handleAddToCart(): void {
@@ -286,6 +298,7 @@ export function ProductDetailPage({ title }: { title: string }) {
           onSetCartQty={(id, qty) => { void setCartQuantity(id, qty); }}
           onRemoveCartItem={(id) => { void removeCartItem(id); }}
           favoriteCount={totalFavorites}
+          onFavoritesRefresh={() => { void refreshFavorites(); }}
           cartOpen={cartSheetOpen}
           onCartOpenChange={setCartSheetOpen}
           onFavoritesRefresh={refreshFavorites}
@@ -370,7 +383,7 @@ export function ProductDetailPage({ title }: { title: string }) {
                       </motion.span>
                     </AnimatePresence>
                   </span>
-                   <motion.button whileTap={{ scale: 0.9 }} type="button" className="sf-quantity-control cursor-pointer" aria-label="Augmenter la quantité" onClick={() => setQuantity(quantity + 1)}>
+                   <motion.button whileTap={{ scale: 0.9 }} type="button" className="sf-quantity-control cursor-pointer" aria-label="Augmenter la quantité" disabled={quantity >= displayStock} onClick={() => setQuantity(Math.min(displayStock, quantity + 1))}>
                      <ChevronRight className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
                    </motion.button>
                 </div>

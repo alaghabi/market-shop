@@ -54,10 +54,7 @@ function findVariantIdForAttribute(item: CartItem, attributeName: string, value:
     && variant.attributes.every((attribute) => selectedAttributes.get(attribute.name) === attribute.value)
   ));
 
-  return exactMatch?.id ?? item.availableVariants.find((variant) => (
-    variant.quantity > 0
-    && variant.attributes.some((attribute) => attribute.name === attributeName && attribute.value === value)
-  ))?.id ?? null;
+  return exactMatch?.id ?? null;
 }
 
 type CartOutput = {
@@ -211,7 +208,11 @@ export function CartPage() {
                         <VariantSelector
                           variants={item.availableVariants}
                           selectedAttributes={Object.fromEntries((item.variantAttributes ?? []).map((attribute) => [attribute.name, attribute.value]))}
-                          onSelect={(name, value) => { void updateQuantity(item.id, item.quantity, findVariantIdForAttribute(item, name, value)); }}
+                          onSelect={(name, value) => {
+                            const nextVariantId = findVariantIdForAttribute(item, name, value);
+                            if (!nextVariantId) return;
+                            void updateQuantity(item.id, item.quantity, nextVariantId);
+                          }}
                           idPrefix={item.id}
                           disabled={updatingItemId === item.id || removingItemId === item.id}
                         />

@@ -1,2 +1,0 @@
-[   56704ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://demo-tech-corner.localhost:8082/client/login:0
-[   84323ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://demo-tech-corner.localhost:8082/api/boutique/auth/login?boutiqueSlug=demo-tech-corner:0
