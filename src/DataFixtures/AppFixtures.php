@@ -84,8 +84,8 @@ final class AppFixtures extends Fixture
         $deliveryCompany = $this->createDeliveryCompany($manager);
         $subscriptionPlan = $this->createSubscriptionPlan($manager);
 
-        $manager->persist(new Theme('Hanooti Glass', 'hanooti-glass', '/images/themes/hanooti-glass.jpg', true, true));
-        $manager->persist(new Theme('Hanooti Marketplace', 'hanooti-marketplace', '/images/themes/hanooti-marketplace.jpg', true, false));
+        $manager->persist(new Theme('Hanooti Glass', 'hanooti-glass', '/images/themes/hanooti-glass.jpg', true, false));
+        $manager->persist(new Theme('Hanooti Marketplace', 'hanooti-marketplace', '/images/themes/hanooti-marketplace.jpg', true, true));
         $manager->persist(new Theme('Nordic Editorial', 'nordic-editorial', '/images/themes/nordic-editorial.jpg', true, false));
         $manager->persist(new Theme('Ocean Minimal', 'ocean-minimal', '/images/themes/ocean-minimal.jpg', true, false));
 
@@ -344,7 +344,7 @@ final class AppFixtures extends Fixture
             $this->faker->phoneNumber(),
             $this->faker->streetAddress(),
             ['facebook' => $this->faker->url(), 'instagram' => $this->faker->url()],
-            'hanooti-glass',
+             'hanooti-marketplace',
         );
         $settings->setSlogan($this->faker->catchPhrase());
         $settings->setDescription($this->faker->paragraph());

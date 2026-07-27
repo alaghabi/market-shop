@@ -102,6 +102,13 @@ final readonly class OrderProvider implements ProviderInterface
             'quantity' => $item->getQuantity(),
             'unitPriceCents' => $item->getUnitPriceCents(),
             'totalCents' => $item->getUnitPriceCents() * $item->getQuantity(),
+            'variantId' => $item->getVariant() ? (string) $item->getVariant()->getId() : null,
+            'variantAttributes' => $item->getVariant()
+                ? array_map(static fn ($attribute): array => [
+                    'name' => $attribute->getAttributeName(),
+                    'value' => $attribute->getAttributeValue(),
+                ], $item->getVariant()->getAttributes()->toArray())
+                : [],
         ], $order->getItems()->toArray());
         $output->shippingAddress = $order->getShippingAddress();
         $output->shippingCity = $order->getShippingCity();

@@ -118,6 +118,8 @@ export type Order = {
     quantity: number;
     unitPriceCents: number;
     totalCents?: number;
+    variantId?: string | null;
+    variantAttributes?: Array<{ name: string; value: string }>;
   }>;
   shippingAddress?: string | null;
   shippingCity?: string | null;

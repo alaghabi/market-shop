@@ -6,6 +6,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Link;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Dto\Review\ReviewInput;
@@ -24,6 +25,7 @@ use App\State\Review\ReviewProvider;
         new GetCollection(
             name: 'reviews_for_product',
             uriTemplate: '/products/{productId}/reviews',
+            uriVariables: ['productId' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id')],
             output: ReviewOutput::class,
             provider: ReviewProvider::class,
         ),
@@ -43,6 +45,7 @@ use App\State\Review\ReviewProvider;
         new Post(
             name: 'create_product_review',
             uriTemplate: '/products/{productId}/reviews',
+            uriVariables: ['productId' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id')],
             security: "is_granted('PUBLIC_ACCESS')",
             input: ReviewInput::class,
             output: ReviewOutput::class,

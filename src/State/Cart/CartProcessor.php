@@ -38,13 +38,13 @@ final readonly class CartProcessor implements ProcessorInterface
         if ('cart_add_item' === $operationName && $data instanceof CartItemInput) {
             $this->rateLimiter->consumeCart('add-item');
 
-            return $this->carts->addItem($boutiqueId, $data->productId, $data->quantity);
+            return $this->carts->addItem($boutiqueId, $data->productId, $data->quantity, $data->variantId);
         }
 
         if ('cart_update_item' === $operationName && $data instanceof CartItemQuantityInput) {
             $this->rateLimiter->consumeCart('update-item');
 
-            return $this->carts->updateItem($boutiqueId, (string) ($uriVariables['itemId'] ?? ''), $data->quantity);
+            return $this->carts->updateItem($boutiqueId, (string) ($uriVariables['itemId'] ?? ''), $data->quantity, $data->variantId);
         }
 
         if ('cart_remove_item' === $operationName) {

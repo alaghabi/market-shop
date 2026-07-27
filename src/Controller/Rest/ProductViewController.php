@@ -8,14 +8,19 @@ use App\Repository\ProductRepository;
 use App\Repository\ProductViewDailyRepository;
 use App\Security\BoutiqueContext;
 use App\Service\Dashboard\DashboardCacheService;
+use App\Service\Module\ModuleAccessService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
 final readonly class ProductViewController
 {
+    private const VIEW_COOKIE_PREFIX = 'hanooti_product_view_';
+    private const VIEW_COOKIE_TTL = 86400;
+
     public function __construct(
         private ProductRepository $products,
         private BoutiqueRepository $boutiques,
@@ -23,6 +28,7 @@ final readonly class ProductViewController
         private EntityManagerInterface $em,
         private ProductViewDailyRepository $dailyViews,
         private DashboardCacheService $dashboardCache,
+        private ModuleAccessService $moduleAccess,
     ) {
     }
 
@@ -45,6 +51,24 @@ final readonly class ProductViewController
             throw new NotFoundHttpException('Product not found');
         }
 
+        if (!$this->moduleAccess->isModuleEnabled('analytics', $product->getBoutique())) {
+            return new JsonResponse([
+                'productId' => (string) $product->getId(),
+                'viewsEnabled' => false,
+                'viewsCount' => 0,
+                'counted' => false,
+            ]);
+        }
+
+        $cookieName = self::VIEW_COOKIE_PREFIX.(string) $product->getId();
+        if ($request->cookies->has($cookieName)) {
+            return new JsonResponse([
+                'productId' => (string) $product->getId(),
+                'viewsCount' => $product->getViewsCount(),
+                'counted' => false,
+            ]);
+        }
+
         $this->em->wrapInTransaction(function () use ($product): void {
             $product->incrementViews();
             $this->dailyViews->incrementForProduct($product, new \DateTimeImmutable('today'));
@@ -53,6 +77,23 @@ final readonly class ProductViewController
         $this->dashboardCache->clearPlatform();
         $this->dashboardCache->clearBoutique((string) $product->getBoutique()->getId());
 
-        return new JsonResponse(['productId' => (string) $product->getId(), 'viewsCount' => $product->getViewsCount()]);
+        $response = new JsonResponse([
+            'productId' => (string) $product->getId(),
+            'viewsCount' => $product->getViewsCount(),
+            'counted' => true,
+        ]);
+        $response->headers->setCookie(Cookie::create(
+            $cookieName,
+            '1',
+            new \DateTimeImmutable(sprintf('+%d seconds', self::VIEW_COOKIE_TTL)),
+            '/',
+            null,
+            $request->isSecure(),
+            true,
+            false,
+            Cookie::SAMESITE_LAX,
+        ));
+
+        return $response;
     }
 }

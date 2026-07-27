@@ -1,17 +1,20 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { appIcons } from '../../icons/fontAwesome';
 import { Badge, Button, Card } from '../../components/ui';
 import { CookieConsentModal } from '../../components/CookieConsentModal';
-import { ImageWithFallback } from '../../components/ImageWithFallback';
+import { ProductImageGallery } from './storefront/ProductImageGallery';
 import { ReviewSection } from '../../components/ReviewSection';
 import { authHeaders, boutiqueLink, boutiqueQuery, resolveBoutiqueSlug } from './boutiqueRouting';
 import { useCartAdd } from './storefront/useCartAdd';
 import { CartSheet, type CartItem as CartSheetItem } from './storefront/CartSheet';
 import { StorefrontHeader } from './storefront/StorefrontHeader';
+import { VariantSelector } from './storefront/VariantSelector';
 import type { StoreProduct } from './storefront/ProductCard';
 import type { StoreBoutique } from './storefront/StorefrontTheme';
+import { FavoriteButton } from './storefront/FavoriteButton';
 import { applyStorefrontTheme, resetStorefrontTheme, type StorefrontThemeData } from '../../theme/storefrontThemeRoot';
 
 type ProductItem = {
@@ -26,8 +29,25 @@ type ProductItem = {
   images: Array<{ url: string; smallUrl?: string; largeUrl?: string; alt: string | null }>;
   stockQuantity: number;
   lowStockThreshold: number;
+  viewsCount?: number;
+  reviewsCount?: number;
+  favoritesCount?: number;
+  rating?: number | null;
   categoryId: string | null;
   categoryName: string | null;
+  variants: ProductVariantItem[];
+};
+
+type ProductVariantItem = {
+  id: string;
+  sku: string | null;
+  sellingPrice: number;
+  comparePrice: number;
+  quantity: number;
+  image: string | null;
+  isDefault: boolean;
+  isActive: boolean;
+  attributes: Array<{ name: string; value: string }>;
 };
 
 type BoutiqueItem = StorefrontThemeData & {
@@ -36,6 +56,8 @@ type BoutiqueItem = StorefrontThemeData & {
   slug: string;
   primaryColor: string;
   reviewsEnabled?: boolean;
+  wishlistEnabled?: boolean;
+  viewsEnabled?: boolean;
   coverImage?: string | null;
 };
 
@@ -47,6 +69,9 @@ type CartOutput = {
     productName: string | null;
     quantity: number;
     unitPriceCents: number;
+    variantId?: string | null;
+    variantSku?: string | null;
+    variantAttributes?: Array<{ name: string; value: string }>;
   }>;
 };
 
@@ -58,10 +83,16 @@ export function ProductDetailPage({ title }: { title: string }) {
   const [product, setProduct] = useState<ProductItem | null>(null);
   const [boutique, setBoutique] = useState<BoutiqueItem | null>(null);
   const [cartItems, setCartItems] = useState<CartSheetItem[]>([]);
+  const [cartSheetOpen, setCartSheetOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoritesCount, setFavoritesCount] = useState(0);
+  const [totalFavorites, setTotalFavorites] = useState(0);
   const { add: addToCart, consentOpen, acceptConsent, error: cartError } = useCartAdd({
     boutiqueSlug,
-    onAdded: () => { window.location.href = boutiqueLink('/cart'); },
+    onAdded: () => { void refreshCart(); setCartSheetOpen(true); },
   });
 
   async function refreshCart(): Promise<void> {
@@ -71,25 +102,30 @@ export function ProductDetailPage({ title }: { title: string }) {
     const payload = await response.json() as CartOutput;
     setCartItems(payload.items
       .filter((item) => item.productId !== null)
-      .map((item) => ({
-        product: {
+       .map((item) => ({
+         itemId: item.id,
+         product: {
           id: item.productId as string,
           name: item.productName ?? 'Produit',
           slug: '',
           priceCents: item.unitPriceCents,
           currency: payload.currency,
-          images: [],
-        },
+           images: [],
+           variantId: item.variantId ?? undefined,
+           variantSku: item.variantSku ?? undefined,
+           variantAttributes: item.variantAttributes ?? [],
+         },
         qty: item.quantity,
       })));
   }
 
   async function setCartQuantity(itemId: string, nextQuantity: number): Promise<void> {
     if (nextQuantity < 1) return;
+    const currentItem = cartItems.find((item) => item.itemId === itemId);
     const response = await fetch(`/api/cart/items/${itemId}${boutiqueQuery(boutiqueSlug)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/merge-patch+json', ...(authHeaders() ?? {}) },
-      body: JSON.stringify({ quantity: nextQuantity }),
+      body: JSON.stringify({ quantity: nextQuantity, variantId: currentItem?.product.variantId ?? null }),
     });
     if (response.ok) await refreshCart();
   }
@@ -118,19 +154,80 @@ export function ProductDetailPage({ title }: { title: string }) {
 
      fetch(`/api/products/${productSlug}${boutiqueQuery(boutiqueSlug)}`, { headers })
       .then((response) => response.ok ? response.json() : null)
-      .then((data) => {
-        if (data) {
-          setProduct({
-            ...data,
-            shortDescription: data.shortDescription ?? null,
-            description: data.description ?? null,
-          } as ProductItem);
-          fetch(`/api/products/${data.id}/view?boutiqueSlug=${encodeURIComponent(boutiqueSlug)}`, { method: 'POST' }).catch(() => {});
-        }
-      })
+       .then((data) => {
+         if (data) {
+           const nextProduct = {
+             ...data,
+             shortDescription: data.shortDescription ?? null,
+             description: data.description ?? null,
+             variants: Array.isArray(data.variants) ? data.variants : [],
+           } as ProductItem;
+            setProduct(nextProduct);
+            setFavoritesCount(nextProduct.favoritesCount ?? 0);
+           const defaultVariant = nextProduct.variants.find((variant) => variant.isActive && variant.isDefault)
+             ?? nextProduct.variants.find((variant) => variant.isActive);
+           setSelectedVariantId(defaultVariant?.id ?? null);
+           setSelectedAttributes(defaultVariant
+             ? Object.fromEntries(defaultVariant.attributes.map((attribute) => [attribute.name, attribute.value]))
+             : {});
+         }
+       })
       .catch(() => {});
-    return resetStorefrontTheme;
-  }, [boutiqueSlug, productSlug]);
+     return resetStorefrontTheme;
+   }, [boutiqueSlug, productSlug]);
+
+  useEffect(() => {
+    if (!product?.id || boutique?.viewsEnabled !== true || !boutiqueSlug) return;
+
+    const viewedKey = `viewed_${product.id}`;
+    if (sessionStorage.getItem(viewedKey)) return;
+
+    fetch(`/api/products/${product.id}/view?boutiqueSlug=${encodeURIComponent(boutiqueSlug)}`, { method: 'POST' })
+      .then(() => sessionStorage.setItem(viewedKey, '1'))
+      .catch(() => {});
+  }, [boutique?.viewsEnabled, boutiqueSlug, product?.id]);
+
+  useEffect(() => {
+    if (!product?.id || boutique?.wishlistEnabled !== true || !boutiqueSlug) return;
+
+    fetch(`/api/favorites/products${boutiqueQuery(boutiqueSlug)}`, { credentials: 'same-origin', headers: authHeaders() })
+      .then((response) => response.ok ? response.json() : [])
+      .then((payload: Array<{ productId?: string }> | { member?: Array<{ productId?: string }>; items?: Array<{ productId?: string }>; 'hydra:member'?: Array<{ productId?: string }> }) => {
+        const favorites = Array.isArray(payload) ? payload : payload.member ?? payload.items ?? payload['hydra:member'] ?? [];
+        setIsFavorite(favorites.some((favorite) => favorite.productId === product.id));
+        setTotalFavorites(favorites.length);
+      })
+      .catch(() => { setIsFavorite(false); setTotalFavorites(0); });
+  }, [boutique?.wishlistEnabled, boutiqueSlug, product?.id]);
+
+  async function refreshFavorites(): Promise<void> {
+    if (!product?.id || boutique?.wishlistEnabled !== true || !boutiqueSlug) return;
+    try {
+      const response = await fetch(`/api/favorites/products${boutiqueQuery(boutiqueSlug)}`, { credentials: 'same-origin', headers: authHeaders() });
+      if (!response.ok) return;
+      const payload = await response.json() as Array<{ productId?: string }> | { member?: Array<{ productId?: string }>; items?: Array<{ productId?: string }>; 'hydra:member'?: Array<{ productId?: string }> };
+      const favorites = Array.isArray(payload) ? payload : payload.member ?? payload.items ?? payload['hydra:member'] ?? [];
+      setIsFavorite(favorites.some((favorite) => favorite.productId === product.id));
+      setTotalFavorites(favorites.length);
+    } catch {
+      setIsFavorite(false);
+      setTotalFavorites(0);
+    }
+  }
+
+  async function toggleFavorite(): Promise<void> {
+    if (!product || boutique?.wishlistEnabled !== true) return;
+
+    const response = await fetch(`/api/favorites/products/${product.id}${boutiqueQuery(boutiqueSlug)}`, {
+      method: isFavorite ? 'DELETE' : 'POST',
+      credentials: 'same-origin',
+      headers: authHeaders(),
+    });
+    if (response.ok) {
+      setIsFavorite((current) => !current);
+      setFavoritesCount((current) => Math.max(0, current + (isFavorite ? -1 : 1)));
+    }
+  }
 
   if (!product) {
     return (
@@ -145,9 +242,23 @@ export function ProductDetailPage({ title }: { title: string }) {
     );
   }
 
-  const discount = product.comparePrice && product.comparePrice > product.sellingPrice
-    ? Math.round((1 - product.sellingPrice / product.comparePrice) * 100)
+  const activeVariants = product.variants.filter((variant) => variant.isActive);
+  const selectedVariant = activeVariants.find((variant) => variant.id === selectedVariantId) ?? null;
+  const displayPrice = selectedVariant?.sellingPrice ?? product.sellingPrice;
+  const displayComparePrice = selectedVariant?.comparePrice || product.comparePrice;
+  const displayStock = selectedVariant?.quantity ?? product.stockQuantity;
+  const discount = displayComparePrice && displayComparePrice > displayPrice
+    ? Math.round((1 - displayPrice / displayComparePrice) * 100)
     : 0;
+
+  function selectAttribute(name: string, value: string): void {
+    const nextAttributes = { ...selectedAttributes, [name]: value };
+    const matchingVariant = activeVariants.find((variant) => variant.attributes.every((attribute) => nextAttributes[attribute.name] === attribute.value));
+    setSelectedAttributes(matchingVariant
+      ? Object.fromEntries(matchingVariant.attributes.map((attribute) => [attribute.name, attribute.value]))
+      : nextAttributes);
+    setSelectedVariantId(matchingVariant?.id ?? selectedVariantId);
+  }
 
   function handleAddToCart(): void {
     if (!product || !boutique) return;
@@ -155,9 +266,13 @@ export function ProductDetailPage({ title }: { title: string }) {
       id: product.id,
       name: product.name,
       slug: product.slug,
-      priceCents: product.sellingPrice,
-      currency: product.currency,
-      images: product.images.map((image) => ({ url: image.largeUrl ?? image.url, alt: image.alt })),
+       priceCents: displayPrice,
+       comparePriceCents: displayComparePrice,
+       currency: product.currency,
+       images: product.images.map((image) => ({ url: image.largeUrl ?? image.url, alt: image.alt })),
+       variantId: selectedVariant?.id,
+       variantSku: selectedVariant?.sku,
+       variantAttributes: selectedVariant?.attributes,
     };
     addToCart(storeProduct, quantity);
   }
@@ -170,6 +285,10 @@ export function ProductDetailPage({ title }: { title: string }) {
           cartItems={cartItems}
           onSetCartQty={(id, qty) => { void setCartQuantity(id, qty); }}
           onRemoveCartItem={(id) => { void removeCartItem(id); }}
+          favoriteCount={totalFavorites}
+          cartOpen={cartSheetOpen}
+          onCartOpenChange={setCartSheetOpen}
+          onFavoritesRefresh={refreshFavorites}
         />
       )}
       <CookieConsentModal open={consentOpen} onAccept={acceptConsent} />
@@ -178,17 +297,7 @@ export function ProductDetailPage({ title }: { title: string }) {
         <Card className="overflow-hidden p-0">
           <div className="grid gap-0 lg:grid-cols-2">
             <div className="overflow-hidden bg-[color:var(--ds-surface-container)]">
-              {product.images.length > 0 ? (
-                  <ImageWithFallback
-                    src={product.images[0].largeUrl ?? product.images[0].url}
-                    alt={product.images[0].alt ?? product.name}
-                    className="h-full w-full object-cover max-h-[500px]"
-                />
-              ) : (
-                <div className="flex h-full min-h-[300px] items-center justify-center text-[color:var(--ds-on-surface-variant)]">
-                  <FontAwesomeIcon icon={appIcons.products} size="3x" />
-                </div>
-              )}
+              <ProductImageGallery images={product.images} productName={product.name} />
             </div>
             <div className="p-8">
               <div className="flex items-start justify-between gap-4">
@@ -201,21 +310,42 @@ export function ProductDetailPage({ title }: { title: string }) {
                 {discount > 0 && <Badge tone="success">-{discount}%</Badge>}
               </div>
 
-              <div className="mt-6 flex items-baseline gap-3">
-                <span className="text-4xl font-bold">{(product.sellingPrice / 100).toFixed(2)} {product.currency}</span>
-                {product.comparePrice && product.comparePrice > product.sellingPrice && (
-                  <span className="text-lg text-[color:var(--ds-on-surface-variant)] line-through">{(product.comparePrice / 100).toFixed(2)} {product.currency}</span>
+              <div className="mt-6 flex items-center justify-between gap-3 text-sm text-[color:var(--ds-on-surface-variant)]">
+                <div className="flex items-center gap-3">
+                   {boutique?.viewsEnabled === true && <span>{product.viewsCount ?? 0} vues</span>}
+                  {boutique?.reviewsEnabled === true && <span>★ {product.reviewsCount ?? 0} avis</span>}
+                  {boutique?.reviewsEnabled === true && product.rating != null && <span>Note {product.rating.toFixed(1)}/5</span>}
+                  {boutique?.wishlistEnabled === true && <span>♡ {favoritesCount} favoris</span>}
+                </div>
+                {boutique?.wishlistEnabled === true && <FavoriteButton productId={product.id} active={isFavorite} onToggle={() => { void toggleFavorite(); }} />}
+              </div>
+
+              <div className="mt-2 flex items-baseline gap-3">
+                <span className="text-4xl font-bold">{(displayPrice / 100).toFixed(2)} {product.currency}</span>
+                {displayComparePrice && displayComparePrice > displayPrice && (
+                  <span className="text-lg text-[color:var(--ds-on-surface-variant)] line-through">{(displayComparePrice / 100).toFixed(2)} {product.currency}</span>
                 )}
               </div>
 
               <div className="mt-4 flex items-center gap-3">
-                <Badge tone={product.stockQuantity > 0 ? 'success' : 'error'}>
-                  {product.stockQuantity > 0 ? `En stock (${product.stockQuantity})` : 'Rupture de stock'}
+                <Badge tone={displayStock > 0 ? 'success' : 'error'}>
+                  {displayStock > 0 ? `En stock (${displayStock})` : 'Rupture de stock'}
                 </Badge>
-                {product.lowStockThreshold > 0 && product.stockQuantity > 0 && product.stockQuantity <= product.lowStockThreshold && (
+                {product.lowStockThreshold > 0 && displayStock > 0 && displayStock <= product.lowStockThreshold && (
                   <Badge tone="warning">Stock bas</Badge>
                 )}
               </div>
+
+              {activeVariants.length > 0 && (
+                <div className="mt-6">
+                  <VariantSelector
+                    variants={activeVariants}
+                    selectedAttributes={selectedAttributes}
+                    onSelect={selectAttribute}
+                    idPrefix={product.id}
+                  />
+                </div>
+              )}
 
               {product.description && (
                 <p className="mt-6 text-[color:var(--ds-on-surface-variant)] leading-relaxed">{product.description}</p>
@@ -223,7 +353,9 @@ export function ProductDetailPage({ title }: { title: string }) {
 
               <div className="mt-8 flex items-center gap-4">
                 <div className="flex items-center rounded-xl border border-[color:var(--ds-outline-variant)]">
-                  <motion.button whileTap={{ scale: 0.9 }} type="button" className="px-4 py-2 text-lg" onClick={() => setQuantity(Math.max(1, quantity - 1))}>-</motion.button>
+                   <motion.button whileTap={{ scale: 0.9 }} type="button" className="sf-quantity-control cursor-pointer" aria-label="Diminuer la quantité" onClick={() => setQuantity(Math.max(1, quantity - 1))}>
+                     <ChevronLeft className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+                   </motion.button>
                   <span className="min-w-[3rem] text-center font-semibold overflow-hidden">
                     <AnimatePresence mode="wait" initial={false}>
                       <motion.span
@@ -238,9 +370,11 @@ export function ProductDetailPage({ title }: { title: string }) {
                       </motion.span>
                     </AnimatePresence>
                   </span>
-                  <motion.button whileTap={{ scale: 0.9 }} type="button" className="px-4 py-2 text-lg" onClick={() => setQuantity(quantity + 1)}>+</motion.button>
+                   <motion.button whileTap={{ scale: 0.9 }} type="button" className="sf-quantity-control cursor-pointer" aria-label="Augmenter la quantité" onClick={() => setQuantity(quantity + 1)}>
+                     <ChevronRight className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+                   </motion.button>
                 </div>
-                <Button variant="primary" className="flex-1" onClick={handleAddToCart}>
+                 <Button variant="primary" className="flex-1" onClick={handleAddToCart} disabled={(activeVariants.length > 0 && !selectedVariant) || displayStock < 1}>
                   <FontAwesomeIcon icon={appIcons.products} /> Ajouter au panier
                 </Button>
               </div>

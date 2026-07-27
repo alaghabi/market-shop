@@ -12,17 +12,19 @@ import {
   X,
 } from 'lucide-react';
 import { CartSheet } from './CartSheet';
-import { boutiqueLink } from '../boutiqueRouting';
+import { authHeaders, boutiqueLink, boutiqueQuery } from '../boutiqueRouting';
 import { type StoreProduct } from './ProductCard';
 import type { StoreCategory, StoreFilter } from './catalogueTypes';
 import { AboutPage, ContactPage, ProductListing, ReviewsPage } from './hanooti-marketplace/pages';
 import { buildCategories, findCategoryBySlug, isPromotion, productMatchesCategory, resolvePage, resolvePathParam } from './hanooti-marketplace/utils';
-import { CookieConsentModal } from '../../../components/CookieConsentModal';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
 import { BoutiqueAccountLink } from '../BoutiqueCustomerAccount';
-import { useCartAdd } from './useCartAdd';
 import { formatStoreReviewDate, storeReviewInitial, useStorefrontReviews, type StoreReview } from './reviews';
 import { getStorefrontThemePreset } from '../../../theme/themes';
+import { FavoriteButton } from './FavoriteButton';
+import { BoutiqueMetrics } from './BoutiqueMetrics';
+import { FavoritesPopover } from './FavoritesPopover';
+import { resolveSectionTitle, resolveStorefrontHero, resolveStorefrontNavigation, type StorefrontContent } from './content';
 
 /** Brand accent used for CTAs/badges — falls back to the editorial black when a boutique has no custom color. */
 const BRAND = 'var(--sf-accent, var(--ds-primary, #111111))';
@@ -64,7 +66,7 @@ const staggerContainer = {
 
 export type { StoreProduct } from './ProductCard';
 
-export type StoreBoutique = {
+export type StoreBoutique = StorefrontContent & {
   id: string;
   name: string;
   slug: string;
@@ -81,22 +83,52 @@ export type StoreBoutique = {
   theme?: string | null;
   fontFamily?: string | null;
   fontSize?: string | null;
+  borderRadius?: string | null;
   reviewsEnabled?: boolean;
+  wishlistEnabled?: boolean;
+  analyticsEnabled?: boolean;
+  viewsEnabled?: boolean;
+  customerAccountsEnabled?: boolean;
+  customersWithAccount?: number;
+  customersWithoutAccount?: number;
+  publicOrdersCount?: number;
 };
 
-type CartItem = { product: StoreProduct; qty: number };
+type CartItem = { product: StoreProduct; qty: number; itemId?: string };
+
+type CartResponse = {
+  currency: string;
+  items: Array<{
+    id: string;
+    productId: string | null;
+    productName: string | null;
+    quantity: number;
+    unitPriceCents: number;
+    variantId?: string | null;
+    variantSku?: string | null;
+    variantAttributes?: Array<{ name: string; value: string }>;
+  }>;
+};
+
+function cartItemKey(item: CartItem): string {
+  return item.itemId ?? `${item.product.id}:${item.product.variantId ?? ''}`;
+}
 export function StorefrontTheme({
   boutique,
   products: initial,
   categories: loadedCategories = [],
   filters,
   reviewsEnabled = false,
+  favoriteProductIds,
+  onToggleFavorite,
 }: {
   boutique: StoreBoutique;
   products: StoreProduct[];
   categories?: StoreCategory[];
   filters: StoreFilter[];
   reviewsEnabled?: boolean;
+  favoriteProductIds: string[];
+  onToggleFavorite: (productId: string) => void;
 }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -147,56 +179,78 @@ export function StorefrontTheme({
       ? initial.filter(isPromotion)
       : initial;
 
-  const addLocalToCart = (product: StoreProduct) => {
-    setCart((current) => {
-      const existing = current.find((item) => item.product.id === product.id);
-      if (existing) {
-        return current.map((item) =>
-          item.product.id === product.id ? { ...item, qty: item.qty + 1 } : item
-        );
-      }
+  async function refreshCart(): Promise<void> {
+    const response = await fetch(`/api/cart${boutiqueQuery(boutique.slug)}`, { credentials: 'same-origin', headers: authHeaders() });
+    if (!response.ok) return;
+    const payload = await response.json() as CartResponse;
+    setCart(payload.items.filter((item) => item.productId !== null).map((item) => {
+      const baseProduct = initial.find((product) => product.id === item.productId);
+      return {
+        itemId: item.id,
+        qty: item.quantity,
+        product: {
+          ...(baseProduct ?? {
+            id: item.productId as string,
+            name: item.productName ?? 'Produit',
+            slug: '',
+            currency: payload.currency,
+            images: [],
+          }),
+          priceCents: item.unitPriceCents,
+          variantId: item.variantId ?? undefined,
+          variantSku: item.variantSku ?? undefined,
+          variantAttributes: item.variantAttributes ?? [],
+        },
+      };
+    }));
+  }
 
-      return [...current, { product, qty: 1 }];
+  useEffect(() => {
+    void refreshCart();
+  }, [boutique.slug, initial]);
+
+  async function handleSetQty(id: string, qty: number): Promise<void> {
+    const item = cart.find((current) => cartItemKey(current) === id);
+    if (!item) return;
+    if (qty <= 0) {
+      await handleRemove(id);
+      return;
+    }
+    await fetch(`/api/cart/items/${id}${boutiqueQuery(boutique.slug)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/merge-patch+json', ...(authHeaders() ?? {}) },
+      body: JSON.stringify({ quantity: qty, variantId: item.product.variantId ?? null }),
     });
-  };
-  const { add: handleAddToCart, consentOpen, acceptConsent, error: cartError } = useCartAdd({ boutiqueSlug: boutique.slug, onAdded: addLocalToCart });
+    await refreshCart();
+  }
+
+  async function handleRemove(id: string): Promise<void> {
+    await fetch(`/api/cart/items/${id}${boutiqueQuery(boutique.slug)}`, { method: 'DELETE', headers: authHeaders() });
+    await refreshCart();
+  }
+
   const { reviews, isLoading: reviewsLoading } = useStorefrontReviews(reviewsEnabled);
   const featuredReviews = reviews.slice(0, 3);
   const productNames = new Map(initial.map((product) => [product.id, product.name]));
 
-  const handleSetQty = (id: string, qty: number) => {
-    if (qty <= 0) {
-      setCart((current) => current.filter((item) => item.product.id !== id));
-      return;
-    }
-
-    setCart((current) =>
-      current.map((item) => (item.product.id === id ? { ...item, qty } : item))
-    );
-  };
-
-  const handleRemove = (id: string) => {
-    setCart((current) => current.filter((item) => item.product.id !== id));
-  };
-
-  const navItems = [
-    { label: 'Accueil', href: boutiqueLink('/') },
-    { label: 'Catalogue', href: boutiqueLink('/catalogue') },
-    { label: 'Promotions', href: boutiqueLink('/promotions') },
-    { label: 'A propos', href: boutiqueLink('/a-propos') },
-    { label: 'Contact', href: boutiqueLink('/contact') },
-  ];
+  const resolvedNavItems = resolveStorefrontNavigation(boutique, reviewsEnabled);
+  const headerConfig = boutique.headerConfig ?? {};
+  const footerConfig = boutique.footerConfig ?? {};
+  const { title: heroTitle, subtitle: heroSubtitle, banner: activeBanner } = resolveStorefrontHero(boutique, boutique.name);
+  const sectionTitle = (type: string, fallback: string): string => resolveSectionTitle(boutique, type, fallback);
+  const footerText = typeof footerConfig.footer_text === 'string' ? footerConfig.footer_text : boutique.description ?? 'Retrouvez toute notre sélection et commandez en ligne.';
+  const copyrightText = typeof footerConfig.copyright_text === 'string' ? footerConfig.copyright_text : `© ${new Date().getFullYear()} ${boutique.name}. Tous droits réservés.`;
+  const showNewsletter = footerConfig.show_newsletter === true;
 
   return (
     <div
-      className="min-h-screen bg-[color:var(--sf-bg,#f6f2eb)] text-[color:var(--sf-text,#171717)]"
+      className="sf-storefront min-h-screen bg-[color:var(--sf-bg,#f6f2eb)] text-[color:var(--sf-text,#171717)]"
       style={{
+        '--sf-accent': boutique.primaryColor ?? '#111111',
         fontFamily: 'var(--ds-font-family, Inter), system-ui, sans-serif',
         fontSize: 'var(--ds-font-size, 16px)',
-      }}
+      } as React.CSSProperties}
     >
-      <CookieConsentModal open={consentOpen} onAccept={acceptConsent} />
-      {cartError && <div role="alert" className="fixed bottom-5 left-1/2 z-[90] -translate-x-1/2 rounded-full bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-xl">{cartError}</div>}
       <TopRibbon boutique={boutique} />
 
       <header className="sticky top-0 z-30 border-b border-black/10 bg-[color:var(--sf-bg,#f6f2eb)]/90 backdrop-blur-xl">
@@ -212,13 +266,13 @@ export function StorefrontTheme({
           <a href={boutiqueLink('/')} className="flex items-center gap-3">
             <ImageWithFallback src={boutique.logoUrl} alt={boutique.logoUrl ? boutique.name : 'Hanooti'} className="h-10 w-10 rounded-full object-cover" />
             <div>
-              <div className="text-xs uppercase tracking-[0.28em] text-black/50">N Collection</div>
+                <div className="text-xs uppercase tracking-[0.28em] text-black/50">{boutique.slogan || 'Boutique'}</div>
               <div className="text-lg font-semibold tracking-tight">{boutique.name}</div>
             </div>
           </a>
 
           <nav className="sf-desktop-nav hidden items-center gap-8 lg:flex">
-            {navItems.map((item) => (
+             {resolvedNavItems.map((item) => (
               <a key={item.label} href={item.href} className="text-sm font-medium text-black/70 transition hover:text-black">
                 {item.label}
               </a>
@@ -226,15 +280,16 @@ export function StorefrontTheme({
           </nav>
 
           <div className="flex items-center gap-2">
-            <button
+             {headerConfig.show_search !== false && <button
               onClick={() => setSearchOpen(true)}
               className="rounded-full border border-black/10 p-2 text-black transition hover:bg-white"
               aria-label="Rechercher"
             >
               <Search className="h-4 w-4" />
-            </button>
-            <BoutiqueAccountLink boutiqueSlug={boutique.slug} />
-            <CartSheet items={cart} onSetQty={handleSetQty} onRemove={handleRemove} />
+             </button>}
+             {boutique.wishlistEnabled === true && <FavoritesPopover boutiqueSlug={boutique.slug} favoriteCount={favoriteProductIds.length} />}
+             {headerConfig.show_account !== false && boutique.customerAccountsEnabled !== false && <BoutiqueAccountLink boutiqueSlug={boutique.slug} />}
+             {headerConfig.show_cart !== false && <CartSheet items={cart} onSetQty={handleSetQty} onRemove={handleRemove} />}
           </div>
         </div>
       </header>
@@ -258,7 +313,7 @@ export function StorefrontTheme({
             >
               <div className="mb-10 flex items-center justify-between">
                 <div>
-                  <div className="text-xs uppercase tracking-[0.28em] text-black/50">Navigation</div>
+               <div className="text-xs uppercase tracking-[0.28em] text-black/50">{boutique.slogan || 'Navigation'}</div>
                   <div className="text-xl font-semibold">{boutique.name}</div>
                 </div>
                 <button className="rounded-full border border-black/10 p-2" onClick={() => setMobileMenu(false)}>
@@ -266,7 +321,7 @@ export function StorefrontTheme({
                 </button>
               </div>
               <nav className="space-y-4">
-                {navItems.map((item) => (
+                 {resolvedNavItems.map((item) => (
                   <a key={item.label} href={item.href} className="block text-lg font-medium text-black/80">
                     {item.label}
                   </a>
@@ -279,7 +334,7 @@ export function StorefrontTheme({
 
       <AnimatePresence>
         {searchOpen && (
-          <SearchOverlay query={searchQuery} onQuery={setSearchQuery} onClose={() => setSearchOpen(false)} />
+          <SearchOverlay query={searchQuery} onQuery={setSearchQuery} onClose={() => setSearchOpen(false)} products={initial} />
         )}
       </AnimatePresence>
 
@@ -294,15 +349,19 @@ export function StorefrontTheme({
               category={currentCategory}
               promotionsOnly={routePage === 'promotions'}
               query={searchQuery}
-              onQuery={setSearchQuery}
-              onAdd={handleAddToCart}
-            />
+               onQuery={setSearchQuery}
+               wishlistEnabled={boutique.wishlistEnabled === true}
+               reviewsEnabled={reviewsEnabled}
+               viewsEnabled={boutique.viewsEnabled === true}
+               favoriteProductIds={favoriteProductIds}
+               onToggleFavorite={onToggleFavorite}
+             />
           ) : routePage === 'about' ? (
             <AboutPage boutique={boutique} categories={categories} />
           ) : routePage === 'contact' ? (
             <ContactPage boutique={boutique} />
           ) : routePage === 'reviews' ? (
-            <ReviewsPage products={initial} reviewsEnabled={reviewsEnabled} />
+            <ReviewsPage products={initial} reviewsEnabled={reviewsEnabled} boutique={boutique} />
           ) : (
           <>
         <section className="px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pb-16 lg:pt-8">
@@ -326,18 +385,18 @@ export function StorefrontTheme({
 
                <div className="relative z-10">
                  <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/70">
-                   <Sparkles className="h-3.5 w-3.5" style={{ color: BRAND }} /> Midnight Collection 2026
+                    <Sparkles className="h-3.5 w-3.5" style={{ color: BRAND }} /> {boutique.slogan || 'Boutique verifiee'}
                  </div>
 
                   <h1
                     className="mt-8 max-w-3xl text-4xl font-semibold uppercase leading-[0.92] tracking-[-0.05em] sm:text-6xl lg:text-7xl"
                     style={{ color: heroTextColor }}
                   >
-                   {formatHeroTitle(boutique.name)}
+                    {heroTitle}
                  </h1>
 
                  <p className="mt-6 max-w-xl text-sm leading-7 text-white/72 sm:text-base">
-                   {boutique.heroSubtitle || boutique.description || 'Precision minimaliste, matieres fortes et silhouettes pensees pour une boutique contemporaine.'}
+                    {heroSubtitle}
                  </p>
 
                  <div className="mt-9 flex flex-wrap gap-3">
@@ -354,10 +413,10 @@ export function StorefrontTheme({
                    <motion.a
                      whileHover={{ y: -2 }}
                      whileTap={{ scale: 0.97 }}
-                     href={boutiqueLink('/promotions')}
+                      href={activeBanner?.button_url ? (activeBanner.button_url.startsWith('/') ? boutiqueLink(activeBanner.button_url) : activeBanner.button_url) : boutiqueLink('/promotions')}
                       className="inline-flex items-center gap-2 rounded-full border border-[color:var(--sf-accent,var(--ds-primary,#111111))] px-6 py-3 text-sm font-semibold text-[color:var(--sf-accent,var(--ds-primary,#111111))] transition hover:bg-[color:var(--sf-accent,var(--ds-primary,#111111))] hover:text-white"
                    >
-                     Voir les drops
+                      {activeBanner?.button_text ?? 'Voir les promotions'}
                    </motion.a>
                  </div>
                </div>
@@ -372,18 +431,18 @@ export function StorefrontTheme({
 
               {featuredProduct && (
                 <motion.div variants={fadeUp}>
-                  <FeaturedProductPanel product={featuredProduct} onAddToCart={handleAddToCart} />
+                    <FeaturedProductPanel product={featuredProduct} reviewsEnabled={reviewsEnabled} viewsEnabled={boutique.viewsEnabled === true} wishlistEnabled={boutique.wishlistEnabled === true} activeFavorite={favoriteProductIds.includes(featuredProduct.id)} onToggleFavorite={onToggleFavorite} />
                 </motion.div>
               )}
 
               <div className="rounded-[1.6rem] border border-black/10 bg-white px-6 py-5">
-                <div className="text-3xl font-semibold tracking-[-0.05em]">24h</div>
-                <div className="mt-1 text-sm text-black/60">Express delivery</div>
+                 <div className="text-3xl font-semibold tracking-[-0.05em]">{boutique.orderMode === 'CATALOG' ? 'Catalogue' : 'En ligne'}</div>
+                 <div className="mt-1 text-sm text-black/60">Commande disponible</div>
               </div>
 
               <div className="rounded-[1.6rem] border border-black/10 bg-white px-6 py-6">
-                <div className="text-lg font-semibold">Join the Collective</div>
-                <p className="mt-2 text-sm leading-6 text-black/60">-15% sur votre premiere commande + acces aux drops limites.</p>
+                 <div className="text-lg font-semibold">Restez informé</div>
+                 <p className="mt-2 text-sm leading-6 text-black/60">Recevez les nouveautés et actualités de la boutique.</p>
                 <form className="mt-4 flex gap-2" onSubmit={(event) => event.preventDefault()}>
                   <input
                     type="email"
@@ -401,11 +460,20 @@ export function StorefrontTheme({
 
         <FeatureTicker />
 
+        {boutique.analyticsEnabled && (
+          <BoutiqueMetrics
+            customersWithAccount={boutique.customersWithAccount}
+            customersWithoutAccount={boutique.customersWithoutAccount}
+            ordersCount={boutique.publicOrdersCount}
+            customerAccountsEnabled={boutique.customerAccountsEnabled}
+          />
+        )}
+
         <section id="story" className="px-4 py-14 sm:px-6 lg:px-8">
           <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[260px_minmax(0,1fr)]">
             <div>
               <div className="text-xs uppercase tracking-[0.25em] text-black/45">Explorer</div>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Nos univers</h2>
+           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">{sectionTitle('categories', 'Nos univers')}</h2>
             </div>
             <motion.div
               className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5"
@@ -444,7 +512,7 @@ export function StorefrontTheme({
 
         <section id="catalogue" className="px-4 py-14 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
-            <SectionHeading eyebrow="Just dropped" title="Nouveautes" href={boutiqueLink('/catalogue')} />
+             <SectionHeading eyebrow="Catalogue" title={sectionTitle('products', 'Nouveautes')} href={boutiqueLink('/catalogue')} />
             <motion.div
               className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-4"
               variants={staggerContainer}
@@ -454,7 +522,7 @@ export function StorefrontTheme({
             >
               {newArrivals.map((product) => (
                 <motion.div key={product.id} variants={fadeUp}>
-                  <ProductEditorialCard product={product} onAddToCart={handleAddToCart} />
+                   <ProductEditorialCard product={product} reviewsEnabled={reviewsEnabled} viewsEnabled={boutique.viewsEnabled === true} wishlistEnabled={boutique.wishlistEnabled === true} activeFavorite={favoriteProductIds.includes(product.id)} onToggleFavorite={onToggleFavorite} />
                 </motion.div>
               ))}
             </motion.div>
@@ -467,10 +535,10 @@ export function StorefrontTheme({
           <section className="px-4 py-8 sm:px-6 lg:px-8">
             <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
               <div className="rounded-[2rem] bg-[#111111] px-8 py-8 text-white sm:px-10 sm:py-10" style={{ backgroundColor: heroColor }}>
-                <div className="text-xs uppercase tracking-[0.24em] text-white/55">Offre limitee</div>
-                <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">-30% sur la selection</h3>
+                 <div className="text-xs uppercase tracking-[0.24em] text-white/55">Offres du moment</div>
+                 <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Découvrez notre sélection</h3>
                 <p className="mt-3 max-w-xl text-sm leading-7 text-white/70">
-                  Pieces fortes, paniers soignes et une direction visuelle proche du template Nordic que vous avez envoye.
+                   Retrouvez les produits et offres actuellement disponibles dans cette boutique.
                 </p>
                 <motion.a
                   whileHover={{ y: -2 }}
@@ -492,18 +560,21 @@ export function StorefrontTheme({
                   )}
                 </div>
                 <div className="px-6 py-5">
-                  <div className="text-xs uppercase tracking-[0.22em] text-black/45">Coup de coeur</div>
-                  <div className="mt-2 text-xl font-semibold">{spotlightProduct.name}</div>
-                  <div className="mt-3 text-sm text-black/55">{formatPrice(spotlightProduct)}</div>
-                  <motion.button
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.96 }}
-                    onClick={() => handleAddToCart(spotlightProduct)}
-                    className="mt-4 rounded-full px-5 py-3 text-sm font-semibold text-white"
-                    style={{ backgroundColor: BRAND }}
-                  >
-                    Ajouter au panier
-                  </motion.button>
+                   <div className="text-xs uppercase tracking-[0.22em] text-black/45">Coup de coeur</div>
+                   <div className="mt-2 text-xl font-semibold">{spotlightProduct.name}</div>
+                   <div className="mt-3 flex items-center justify-between gap-3 text-sm text-black/55">
+                     <div className="flex items-center gap-3">
+                        {boutique.viewsEnabled === true && <span>{spotlightProduct.viewsCount ?? 0} vues</span>}
+                       <span className="font-semibold text-black">{formatPrice(spotlightProduct)}</span>
+                       {reviewsEnabled && <span>{spotlightProduct.reviewsCount ?? 0} avis</span>}
+                        {reviewsEnabled && spotlightProduct.rating != null && <span>Note {spotlightProduct.rating.toFixed(1)}/5</span>}
+                        {boutique.wishlistEnabled === true && <span>{spotlightProduct.favoritesCount ?? 0} favoris</span>}
+                     </div>
+                     {boutique.wishlistEnabled && <FavoriteButton productId={spotlightProduct.id} active={favoriteProductIds.includes(spotlightProduct.id)} onToggle={onToggleFavorite} />}
+                   </div>
+                   <a href={boutiqueLink(`/products/${spotlightProduct.slug}`)} className="sf-neutral-action mt-4 inline-flex rounded-full px-5 py-3 text-sm font-semibold">
+                    Voir le produit
+                  </a>
                 </div>
               </div>
             </div>
@@ -512,7 +583,7 @@ export function StorefrontTheme({
 
         <section className="px-4 py-14 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
-            <SectionHeading eyebrow="Community picks" title="Best-sellers" href={boutiqueLink('/catalogue')} />
+             <SectionHeading eyebrow="Selection" title={sectionTitle('best_sellers', 'Best-sellers')} href={boutiqueLink('/catalogue')} />
             <motion.div
               className="mt-8 grid gap-6 md:grid-cols-2"
               variants={staggerContainer}
@@ -522,7 +593,7 @@ export function StorefrontTheme({
             >
               {bestSellers.map((product) => (
                 <motion.div key={product.id} variants={fadeUp}>
-                  <ProductEditorialCard product={product} onAddToCart={handleAddToCart} compact />
+                    <ProductEditorialCard product={product} compact reviewsEnabled={reviewsEnabled} viewsEnabled={boutique.viewsEnabled === true} wishlistEnabled={boutique.wishlistEnabled === true} activeFavorite={favoriteProductIds.includes(product.id)} onToggleFavorite={onToggleFavorite} />
                 </motion.div>
               ))}
             </motion.div>
@@ -532,9 +603,9 @@ export function StorefrontTheme({
         {reviewsEnabled && <section id="avis" className="px-4 py-14 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
+               <div>
                 <div className="text-xs uppercase tracking-[0.24em] text-black/45">Avis clients</div>
-                <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Ce que disent nos clients</h2>
+                <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">{sectionTitle('reviews', 'Ce que disent nos clients')}</h2>
               </div>
               <a href={boutiqueLink('/avis')} className="inline-flex items-center gap-2 text-sm font-semibold text-black/70 transition hover:text-black">
                 Voir tous les avis <ArrowRight className="h-4 w-4" />
@@ -548,10 +619,10 @@ export function StorefrontTheme({
 
         <section id="contact" className="px-4 py-10 sm:px-6 lg:px-8">
           <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <ServiceCard icon={<Truck className="h-5 w-5" />} title="Livraison offerte" description="Des 60 DT d'achat" />
-            <ServiceCard icon={<ArrowRight className="h-5 w-5" />} title="Retours 30 jours" description="Satisfait ou rembourse" />
-            <ServiceCard icon={<ShieldCheck className="h-5 w-5" />} title="Paiement securise" description="Carte, wallet et paiement livre" />
-            <ServiceCard icon={<Mail className="h-5 w-5" />} title="Support 7j/7" description={boutique.email || 'Une equipe dediee'} />
+             <ServiceCard icon={<Truck className="h-5 w-5" />} title="Livraison" description="Des options adaptées à votre commande" />
+             <ServiceCard icon={<ArrowRight className="h-5 w-5" />} title="Retours" description="Une politique claire pour vos achats" />
+             <ServiceCard icon={<ShieldCheck className="h-5 w-5" />} title="Paiement sécurisé" description="Des moyens de paiement protégés" />
+             <ServiceCard icon={<Mail className="h-5 w-5" />} title="Support" description={boutique.email || 'Une équipe dédiée'} />
           </div>
         </section>
           </>
@@ -568,9 +639,9 @@ export function StorefrontTheme({
                 <div className="text-sm text-white/45">Boutique editoriale</div>
               </div>
             </div>
-            <p className="mt-5 max-w-sm text-sm leading-7 text-white/62">
-              {boutique.description || 'Design fort, produits choisis et experience inspiree du template Nordic Store.'}
-            </p>
+             <p className="mt-5 max-w-sm text-sm leading-7 text-white/62">
+               {footerText}
+             </p>
           </div>
 
           <FooterLinks title="Boutique" links={[
@@ -585,9 +656,9 @@ export function StorefrontTheme({
             { label: 'Livraison & retours', href: boutiqueLink('/contact') },
           ]} />
 
-          <div>
-            <div className="text-sm font-semibold">Newsletter</div>
-            <p className="mt-3 text-sm text-white/55">-10% sur votre premiere commande.</p>
+           {showNewsletter && <div>
+             <div className="text-sm font-semibold">Newsletter</div>
+             <p className="mt-3 text-sm text-white/55">Recevez nos nouveautés et offres.</p>
             <form className="mt-4 flex gap-2" onSubmit={(event) => event.preventDefault()}>
               <input
                 type="email"
@@ -598,11 +669,11 @@ export function StorefrontTheme({
                 OK
               </button>
             </form>
-          </div>
+           </div>}
         </div>
         <div className="border-t border-white/10">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-5 text-xs text-white/45 sm:px-6 lg:px-8">
-            <span>© 2026 {boutique.name}. Tous droits reserves.</span>
+             <span>{copyrightText}</span>
             <span>{boutique.address || 'Tunisie'}</span>
           </div>
         </div>
@@ -671,7 +742,7 @@ function CategoryAccentCard({ category }: { category: StoreCategory }) {
   );
 }
 
-function FeaturedProductPanel({ product, onAddToCart }: { product: StoreProduct; onAddToCart: (product: StoreProduct) => void }) {
+function FeaturedProductPanel({ product, reviewsEnabled, viewsEnabled, wishlistEnabled, activeFavorite, onToggleFavorite }: { product: StoreProduct; reviewsEnabled: boolean; viewsEnabled: boolean; wishlistEnabled: boolean; activeFavorite: boolean; onToggleFavorite: (productId: string) => void }) {
   return (
     <div className="overflow-hidden rounded-[1.6rem] border border-black/10 bg-white">
       <div className="aspect-[1.15] overflow-hidden bg-[#e6ddcf]">
@@ -688,15 +759,20 @@ function FeaturedProductPanel({ product, onAddToCart }: { product: StoreProduct;
         <div className="mt-3 text-xl font-semibold tracking-tight">{product.name}</div>
         <p className="mt-2 text-sm leading-6 text-black/58">{product.description || 'Piece phare de la collection, selectionnee pour incarner le template de reference.'}</p>
         <div className="mt-4 flex items-center justify-between gap-4">
-          <div className="text-lg font-semibold">{formatPrice(product)}</div>
-          <motion.button
-            whileHover={{ y: -2, backgroundColor: BRAND, color: '#ffffff', borderColor: BRAND }}
-            whileTap={{ scale: 0.96 }}
-            onClick={() => onAddToCart(product)}
-            className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-[#111111]"
+          <div className="flex items-center gap-3">
+             {viewsEnabled && <span className="text-xs text-black/50">{product.viewsCount ?? 0} vues</span>}
+            <div className="text-lg font-semibold">{formatPrice(product)}</div>
+            {reviewsEnabled && <span className="text-xs text-black/50">{product.reviewsCount ?? 0} avis</span>}
+            {reviewsEnabled && product.rating != null && <span className="text-xs text-black/50">Note {product.rating.toFixed(1)}/5</span>}
+            {wishlistEnabled && <span className="text-xs text-black/50">{product.favoritesCount ?? 0} favoris</span>}
+          </div>
+          {wishlistEnabled && <FavoriteButton productId={product.id} active={activeFavorite} onToggle={onToggleFavorite} />}
+          <a
+            href={boutiqueLink(`/products/${product.slug}`)}
+             className="sf-neutral-action rounded-full px-4 py-2 text-sm font-semibold"
           >
-            Ajouter au panier
-          </motion.button>
+            Voir le produit
+          </a>
         </div>
       </div>
     </div>
@@ -704,7 +780,7 @@ function FeaturedProductPanel({ product, onAddToCart }: { product: StoreProduct;
 }
 
 function FeatureTicker() {
-  const items = ['◆ Design nordique', '◆ Livraison 24h', '◆ Paiement securise', '◆ Retours gratuits 30j', '◆ Support 7j/7', '◆ Edition limitee'];
+  const items = ['◆ Nouveautés', '◆ Paiement sécurisé', '◆ Retours', '◆ Support boutique', '◆ Sélection boutique', '◆ Commande en ligne'];
   const repeatedItems = [...items, ...items, ...items];
 
   return (
@@ -741,12 +817,20 @@ function SectionHeading({ eyebrow, title, href }: { eyebrow: string; title: stri
 
 function ProductEditorialCard({
   product,
-  onAddToCart,
   compact = false,
+  reviewsEnabled,
+  viewsEnabled,
+  wishlistEnabled,
+  activeFavorite,
+  onToggleFavorite,
 }: {
   product: StoreProduct;
-  onAddToCart: (product: StoreProduct) => void;
   compact?: boolean;
+  reviewsEnabled: boolean;
+  viewsEnabled: boolean;
+  wishlistEnabled: boolean;
+  activeFavorite: boolean;
+  onToggleFavorite: (productId: string) => void;
 }) {
   const badge = resolveBadge(product);
   const image = getProductImage(product);
@@ -771,30 +855,33 @@ function ProductEditorialCard({
             {badge}
           </div>
         </a>
-        <button
-          type="button"
-          aria-label={`Ajouter ${product.name} au panier`}
-          onClick={(event) => {
-            event.preventDefault();
-            onAddToCart(product);
-          }}
-          className="absolute bottom-4 right-4 rounded-full px-4 py-2 text-sm font-semibold text-white opacity-100 transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ backgroundColor: BRAND }}
+        <a
+          href={boutiqueLink(`/products/${product.slug}`)}
+          aria-label={`Voir le produit ${product.name}`}
+           className="sf-neutral-action absolute bottom-4 right-4 rounded-full px-4 py-2 text-sm font-semibold opacity-100 transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
         >
-          Ajouter
-        </button>
+          Voir le produit
+        </a>
       </div>
       <div className="px-5 py-5">
         <div className="text-xs uppercase tracking-[0.2em] text-black/45">{product.categoryName || 'Collection'}</div>
         <a href={boutiqueLink(`/products/${product.slug}`)} className="mt-2 block text-lg font-semibold tracking-tight text-[#171717]">
           {product.name}
         </a>
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-black/55">
+        <div className="mt-3 flex items-center justify-between gap-3 text-sm text-black/55">
+          <div className="flex items-center gap-3 text-xs">
+             {viewsEnabled && <span>{product.viewsCount ?? 0} vues</span>}
+            {reviewsEnabled && <span>★ {product.reviewsCount ?? 0} avis</span>}
+            {reviewsEnabled && product.rating != null && <span>Note {product.rating.toFixed(1)}/5</span>}
+            {wishlistEnabled && <span>♡ {product.favoritesCount ?? 0} favoris</span>}
+          </div>
+          {wishlistEnabled && <FavoriteButton productId={product.id} active={activeFavorite} onToggle={onToggleFavorite} />}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
           <span className="font-semibold text-[#171717]">{formatPrice(product)}</span>
           {product.comparePriceCents && product.comparePriceCents > product.priceCents && (
-            <span className="line-through">{(product.comparePriceCents / 100).toFixed(2)} {product.currency}</span>
+            <span className="text-black/55 line-through">{(product.comparePriceCents / 100).toFixed(2)} {product.currency}</span>
           )}
-          {product.rating ? <span>★ {product.rating.toFixed(1)}</span> : null}
         </div>
       </div>
     </motion.div>
@@ -832,17 +919,32 @@ function SearchOverlay({
   query,
   onQuery,
   onClose,
+  products = [],
 }: {
   query: string;
   onQuery: (value: string) => void;
   onClose: () => void;
+  products?: StoreProduct[];
 }) {
+  const normalized = query.trim().toLowerCase();
+  const results = useMemo(
+    () => normalized
+      ? products.filter((product) =>
+          [product.name, product.categoryName, product.description]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(normalized))
+        )
+      : [],
+    [normalized, products],
+  );
+
   return (
     <motion.div
-      className="fixed inset-0 z-50 bg-[#111111]/40 backdrop-blur-md"
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#111111]/40 backdrop-blur-md"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      onClick={onClose}
     >
       <motion.div
         className="mx-auto mt-12 max-w-3xl rounded-[2rem] bg-[#f6f2eb] p-6 shadow-2xl sm:mt-20"
@@ -850,6 +952,7 @@ function SearchOverlay({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -10, scale: 0.98 }}
         transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+        onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center gap-4 rounded-full border border-black/10 bg-white px-5 py-4">
           <Search className="h-5 w-5 text-black/45" />
@@ -864,6 +967,41 @@ function SearchOverlay({
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {normalized && (
+          <div className="mt-4 max-h-[50vh] overflow-y-auto">
+            {results.length === 0 ? (
+              <p className="py-8 text-center text-sm text-black/45">Aucun produit trouvé pour "{query}"</p>
+            ) : (
+              <div className="grid gap-3">
+                {results.slice(0, 12).map((product) => (
+                  <a
+                    key={product.id}
+                    href={boutiqueLink(`/products/${product.slug}`)}
+                    onClick={onClose}
+                    className="flex items-center gap-4 rounded-2xl bg-white p-3 transition hover:bg-black/5"
+                  >
+                    <ImageWithFallback
+                      src={getProductImage(product)}
+                      alt=""
+                      className="h-14 w-14 shrink-0 rounded-xl object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-black truncate">{product.name}</div>
+                      <div className="mt-1 text-xs text-black/45">{product.categoryName}</div>
+                      <div className="mt-1 text-sm font-bold text-black">
+                        {(product.priceCents / 100).toFixed(2)} {product.currency}
+                      </div>
+                    </div>
+                  </a>
+                ))}
+                {results.length > 12 && (
+                  <p className="text-center text-xs text-black/45">{results.length - 12} autres résultats...</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );
@@ -896,11 +1034,6 @@ function resolveBadge(product: StoreProduct): string {
 
 function formatPrice(product: StoreProduct): string {
   return `${(product.priceCents / 100).toFixed(2)} ${product.currency}`;
-}
-
-function formatHeroTitle(name: string): string {
-  const brand = name.toUpperCase();
-  return `${brand} FUTURE COLLECTION`;
 }
 
 function buildFallbackCategories(products: StoreProduct[]): StoreCategory[] {

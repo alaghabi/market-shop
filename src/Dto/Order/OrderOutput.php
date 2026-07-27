@@ -16,6 +16,7 @@ final class OrderOutput
     public int $discountCents;
     public int $totalCents;
     public string $currency;
+    /** @var list<array<string, mixed>> */
     public array $items;
     public ?string $shippingAddress = null;
     public ?string $shippingCity = null;

@@ -26,7 +26,7 @@ class BoutiqueSettings extends AbstractEntity
      * @param array{products_per_page?: int, default_sort?: string, show_stock?: bool, show_sku?: bool, show_brand?: bool, show_reviews?: bool, show_related_products?: bool}                             $catalogConfig
      * @param list<array{field: string, visible?: bool, required?: bool}>                                                                                                                                 $customerFieldConfig
      * @param array{email_notifications?: bool, sms_notifications?: bool, whatsapp_notifications?: bool}                                                                                                  $notificationConfig
-     * @param array{enable_reviews?: bool, enable_wishlist?: bool, enable_coupons?: bool, enable_blog?: bool, enable_brands?: bool, enable_multi_address?: bool}                                          $moduleConfig
+     * @param array{enable_reviews?: bool, enable_wishlist?: bool, enable_customer_auth?: bool, enable_coupons?: bool, enable_blog?: bool, enable_brands?: bool, enable_multi_address?: bool}             $moduleConfig
      * @param array{cod_enabled?: bool, bank_transfer_enabled?: bool, online_payment_enabled?: bool}                                                                                                      $paymentConfig
      * @param array{shipping_enabled?: bool, shipping_provider?: string, shipping_api_key?: string, shipping_api_secret?: string}                                                                         $shippingConfig
      * @param array{default_language?: string, default_currency?: string, timezone?: string}                                                                                                              $languageConfig
@@ -57,12 +57,17 @@ class BoutiqueSettings extends AbstractEntity
         private ?string $theme = null,
         #[ORM\Column(type: 'json')]
         private array $colorPalette = [
-            'primary' => '#3525cd',
-            'primaryContainer' => '#4f46e5',
-            'secondary' => '#505f76',
-            'background' => '#fcf8ff',
+            'primary' => '#7C3AED',
+            'primaryContainer' => '#A78BFA',
+            'secondary' => '#475569',
+            'background' => '#FAF5FF',
             'surface' => '#ffffff',
-            'text' => '#1b1b24',
+            'surfaceContainer' => '#F3E8FF',
+            'surfaceContainerHigh' => '#E9D5FF',
+            'text' => '#0F172A',
+            'textMuted' => '#475569',
+            'outline' => '#DDD6FE',
+            'accent' => '#22C55E',
         ],
         #[ORM\Column(type: 'json')]
         private array $iconSet = [
@@ -576,13 +581,13 @@ class BoutiqueSettings extends AbstractEntity
         $this->touch();
     }
 
-    /** @return array{enable_reviews?: bool, enable_wishlist?: bool, enable_coupons?: bool, enable_blog?: bool, enable_brands?: bool, enable_multi_address?: bool} */
+    /** @return array{enable_reviews?: bool, enable_wishlist?: bool, enable_customer_auth?: bool, enable_coupons?: bool, enable_blog?: bool, enable_brands?: bool, enable_multi_address?: bool} */
     public function getModuleConfig(): array
     {
         return $this->moduleConfig;
     }
 
-    /** @param array{enable_reviews?: bool, enable_wishlist?: bool, enable_coupons?: bool, enable_blog?: bool, enable_brands?: bool, enable_multi_address?: bool} $moduleConfig */
+    /** @param array{enable_reviews?: bool, enable_wishlist?: bool, enable_customer_auth?: bool, enable_coupons?: bool, enable_blog?: bool, enable_brands?: bool, enable_multi_address?: bool} $moduleConfig */
     public function setModuleConfig(array $moduleConfig): void
     {
         $this->moduleConfig = $moduleConfig;

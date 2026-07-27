@@ -7,6 +7,7 @@ use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: OrderItemRepository::class)]
 #[ORM\Table(name: 'order_item')]
+#[ORM\Index(name: 'idx_order_item_variant', columns: ['variant_id'])]
 class OrderItem extends AbstractEntity
 {
     public function __construct(
@@ -28,6 +29,9 @@ class OrderItem extends AbstractEntity
         private int $discountCents = 0,
         #[ORM\Column]
         private int $totalCents = 0,
+        #[ORM\ManyToOne(targetEntity: ProductVariant::class)]
+        #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+        private ?ProductVariant $variant = null,
     ) {
         parent::__construct();
     }
@@ -40,6 +44,11 @@ class OrderItem extends AbstractEntity
     public function getProduct(): ?Product
     {
         return $this->product;
+    }
+
+    public function getVariant(): ?ProductVariant
+    {
+        return $this->variant;
     }
 
     public function getSku(): string

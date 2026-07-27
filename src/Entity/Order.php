@@ -121,7 +121,7 @@ class Order extends AbstractEntity
         $this->shippingLocalityId = $shippingLocalityId;
     }
 
-    public function addItem(?Product $product, string $productName, string $sku, int $quantity, int $unitPriceCents): void
+    public function addItem(?Product $product, string $productName, string $sku, int $quantity, int $unitPriceCents, ?ProductVariant $variant = null): void
     {
         $item = new OrderItem(
             $this,
@@ -132,6 +132,7 @@ class Order extends AbstractEntity
             $unitPriceCents,
             0,
             $quantity * $unitPriceCents,
+            $variant,
         );
 
         $this->items->add($item);

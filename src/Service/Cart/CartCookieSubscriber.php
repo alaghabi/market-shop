@@ -41,7 +41,7 @@ final class CartCookieSubscriber implements EventSubscriberInterface
         $event->getResponse()->headers->setCookie(Cookie::create(
             $cookieName,
             $cookieValue,
-            new \DateTimeImmutable('+30 days'),
+            new \DateTimeImmutable('+7 days'),
             '/',
             null,
             $request->isSecure(),

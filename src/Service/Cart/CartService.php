@@ -15,6 +15,8 @@ use App\Entity\Governorate;
 use App\Entity\Locality;
 use App\Entity\Order;
 use App\Entity\PaymentMethod;
+use App\Entity\Product;
+use App\Entity\ProductVariant;
 use App\Enum\OrderChannel;
 use App\Enum\OrderStatus;
 use App\Repository\PaymentMethodRepository;
@@ -67,7 +69,7 @@ final readonly class CartService
         return $this->toOutput($this->getOrCreateCart($boutiqueId));
     }
 
-    public function addItem(string $boutiqueId, string $productId, int $quantity): CartOutput
+    public function addItem(string $boutiqueId, string $productId, int $quantity, ?string $variantId = null): CartOutput
     {
         if ($quantity < 1) {
             throw new BadRequestHttpException('Quantity must be greater than zero.');
@@ -79,13 +81,14 @@ final readonly class CartService
             throw new NotFoundHttpException('Product not found.');
         }
 
-        $cart->addItem($product, $quantity);
+        $variant = $this->findVariant($product, $variantId);
+        $cart->addItem($product, $quantity, $variant);
         $this->em->flush();
 
         return $this->toOutput($cart);
     }
 
-    public function updateItem(string $boutiqueId, string $itemId, int $quantity): CartOutput
+    public function updateItem(string $boutiqueId, string $itemId, int $quantity, ?string $variantId = null): CartOutput
     {
         if ($quantity < 1) {
             throw new BadRequestHttpException('Quantity must be greater than zero.');
@@ -93,7 +96,27 @@ final readonly class CartService
 
         $cart = $this->getOrCreateCart($boutiqueId);
         $item = $this->findCartItem($cart, $itemId);
-        $item->changeQuantity($quantity);
+        $product = $item->getProduct();
+        if (!$product instanceof Product) {
+            throw new NotFoundHttpException('Product not found.');
+        }
+
+        $variant = $this->findVariant($product, $variantId);
+        $currentVariantId = (string) $item->getVariant()?->getId();
+        $nextVariantId = (string) $variant?->getId();
+        if ($currentVariantId !== $nextVariantId) {
+            $existing = $cart->findItemForProduct($product, $variant);
+            if ($existing instanceof CartItem && $existing !== $item) {
+                $existing->changeQuantity($existing->getQuantity() + $quantity);
+                $cart->removeItem($item);
+                $this->em->remove($item);
+            } else {
+                $item->changeVariant($variant, $variant?->getSellingPrice() ?? $product->getSellingPrice());
+                $item->changeQuantity($quantity);
+            }
+        } else {
+            $item->changeQuantity($quantity);
+        }
         $cart->touch();
         $this->em->flush();
 
@@ -155,12 +178,22 @@ final readonly class CartService
 
         foreach ($cart->getItems() as $item) {
             $product = $item->getProduct();
+            $variant = $item->getVariant();
+            $productName = $product?->getName() ?? 'Produit supprimé';
+            if ($variant instanceof ProductVariant && !$variant->getAttributes()->isEmpty()) {
+                $attributes = array_map(
+                    static fn ($attribute): string => sprintf('%s: %s', $attribute->getAttributeName(), $attribute->getAttributeValue()),
+                    $variant->getAttributes()->toArray(),
+                );
+                $productName .= ' ('.implode(', ', $attributes).')';
+            }
             $order->addItem(
                 $product,
-                $product?->getName() ?? 'Produit supprimé',
-                $product?->getSku() ?? '',
+                $productName,
+                $variant?->getSku() ?? $product?->getSku() ?? '',
                 $item->getQuantity(),
                 $item->getUnitPriceCents(),
+                $variant,
             );
         }
 
@@ -268,6 +301,27 @@ final readonly class CartService
         }
 
         return $item;
+    }
+
+    private function findVariant(Product $product, ?string $variantId): ?ProductVariant
+    {
+        if (null === $variantId || '' === trim($variantId)) {
+            return null;
+        }
+
+        foreach ($product->getVariants() as $variant) {
+            if ((string) $variant->getId() !== $variantId) {
+                continue;
+            }
+
+            if (!$variant->isActive()) {
+                throw new NotFoundHttpException('Product variant not found.');
+            }
+
+            return $variant;
+        }
+
+        throw new NotFoundHttpException('Product variant not found.');
     }
 
     /**
@@ -521,7 +575,27 @@ final readonly class CartService
         $output->id = (string) $item->getId();
         $output->productId = $product ? (string) $product->getId() : null;
         $output->productName = $product?->getName();
-        $output->sku = $product?->getSku();
+        $output->sku = $item->getVariant()?->getSku() ?? $product?->getSku();
+        $output->variantId = $item->getVariant() ? (string) $item->getVariant()->getId() : null;
+        $output->variantSku = $item->getVariant()?->getSku();
+        $output->variantAttributes = $item->getVariant()
+            ? array_map(static fn ($attribute): array => [
+                'name' => $attribute->getAttributeName(),
+                'value' => $attribute->getAttributeValue(),
+            ], $item->getVariant()->getAttributes()->toArray())
+            : [];
+        $output->availableVariants = $product
+            ? array_values(array_map(static fn (ProductVariant $variant): array => [
+                'id' => (string) $variant->getId(),
+                'sku' => $variant->getSku(),
+                'sellingPrice' => $variant->getSellingPrice(),
+                'quantity' => $variant->getQuantity(),
+                'attributes' => array_map(static fn ($attribute): array => [
+                    'name' => $attribute->getAttributeName(),
+                    'value' => $attribute->getAttributeValue(),
+                ], $variant->getAttributes()->toArray()),
+            ], $product->getVariants()->filter(static fn (ProductVariant $variant): bool => $variant->isActive())->toArray()))
+            : [];
         $output->quantity = $item->getQuantity();
         $output->unitPriceCents = $item->getUnitPriceCents();
         $output->totalCents = $item->getTotalCents();

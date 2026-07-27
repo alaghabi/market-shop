@@ -40,6 +40,13 @@ final class BoutiqueOutput
     public bool $hasActiveSubscription = false;
     public bool $isVisiblePublicly = false;
     public bool $reviewsEnabled = false;
+    public bool $wishlistEnabled = false;
+    public bool $analyticsEnabled = false;
+    public bool $viewsEnabled = false;
+    public bool $customerAccountsEnabled = true;
+    public int $customersWithAccount = 0;
+    public int $customersWithoutAccount = 0;
+    public int $publicOrdersCount = 0;
 
     public array $colorPalette = [];
     public ?string $theme = null;
@@ -52,4 +59,12 @@ final class BoutiqueOutput
     public array $navigationItems = [];
     public array $frontOfficePages = [];
     public array $featuredCategories = [];
+    public array $homepageSections = [];
+    public array $banners = [];
+    public array $catalogConfig = [];
+    public array $moduleConfig = [];
+    public ?string $slogan = null;
+    public ?string $favicon = null;
+    public ?string $maintenanceMessage = null;
+    public ?string $orderMode = null;
 }

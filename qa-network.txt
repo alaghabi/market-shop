@@ -1,0 +1,8 @@
+11. [GET] http://demo-beauty-lab.localhost:8082/api/routes => [200] OK
+13. [GET] http://demo-beauty-lab.localhost:8082/api/cart?boutiqueSlug=demo-beauty-lab => [200] OK
+14. [GET] http://demo-beauty-lab.localhost:8082/api/boutiques/demo-beauty-lab => [200] OK
+15. [GET] http://demo-beauty-lab.localhost:8082/api/products/demo-beauty-lab-doloremque-unde-voluptatem-9?boutiqueSlug=demo-beauty-lab => [200] OK
+18. [GET] http://demo-beauty-lab.localhost:8082/api/products/019f8440-3265-7f55-8a9c-6e446bf315df/reviews => [404] Not Found
+19. [POST] http://demo-beauty-lab.localhost:8082/api/products/019f8440-3265-7f55-8a9c-6e446bf315df/view?boutiqueSlug=demo-beauty-lab => [200] OK
+
+Note: 14 static requests not shown, run with "static" option to see them.

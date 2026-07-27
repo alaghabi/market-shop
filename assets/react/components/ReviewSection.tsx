@@ -16,16 +16,17 @@ type ReviewSectionProps = {
   scope?: 'boutique' | 'platform';
 };
 
-export function ReviewSection({ boutiqueSlug: _boutiqueSlug, productId, scope = 'boutique' }: ReviewSectionProps) {
+export function ReviewSection({ boutiqueSlug: _boutiqueSlug, productId, scope = 'boutique', onSubmitted }: ReviewSectionProps & { onSubmitted?: () => void }) {
   const [reviews, setReviews] = useState<ReviewOutput[]>([]);
   const [authorName, setAuthorName] = useState('');
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
   const endpoint = scope === 'platform' ? '/api/platform/reviews' : '/api/reviews';
-  const listEndpoint = productId ? `${endpoint}?productId=${encodeURIComponent(productId)}` : endpoint;
+  const productEndpoint = productId ? `/api/products/${encodeURIComponent(productId)}/reviews` : endpoint;
+  const listEndpoint = productEndpoint;
 
   useEffect(() => {
     fetch(listEndpoint)
@@ -43,8 +44,13 @@ export function ReviewSection({ boutiqueSlug: _boutiqueSlug, productId, scope = 
     event.preventDefault();
     setError('');
 
+    if (rating < 1) {
+      setError('Veuillez sélectionner une note.');
+      return;
+    }
+
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetch(productEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productId: productId ?? null, authorName, rating, comment: comment || null }),
@@ -56,8 +62,9 @@ export function ReviewSection({ boutiqueSlug: _boutiqueSlug, productId, scope = 
       }
 
       setSubmitted(true);
+      onSubmitted?.();
       setAuthorName('');
-      setRating(5);
+      setRating(0);
       setComment('');
 
     } catch {
@@ -134,7 +141,7 @@ export function ReviewSection({ boutiqueSlug: _boutiqueSlug, productId, scope = 
                      onClick={() => setRating(star)}
                      aria-label={`${star} étoile${star > 1 ? 's' : ''}`}
                      aria-pressed={star === rating}
-                     className={`lovable-rating-button${star <= rating ? ' lovable-rating-button--active' : ''}`}
+                      className={`sf-rating-button${star <= rating ? ' sf-rating-button--active' : ''}`}
                    >
                      ★
                    </button>

@@ -219,7 +219,8 @@ final class SubscriptionPlanProcessor implements ProcessorInterface
         $output->isFree = $entity->isFree();
         $output->isVisible = $entity->isVisible();
         $output->isActive = $entity->isActive();
-        $output->modules = $entity->getModules();
+        $allowedModuleCodes = $this->subscriptionModules->findAllowedModuleCodes($entity);
+        $output->modules = [] !== $allowedModuleCodes ? $allowedModuleCodes : $entity->getModules();
         $output->currency = $entity->getCurrency();
         $output->displayOrder = $entity->getDisplayOrder();
         $output->themes = array_map(

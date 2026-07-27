@@ -11,6 +11,8 @@ use App\Entity\ProductImage;
 use App\Entity\ProductFilterValue;
 use App\Repository\BoutiqueRepository;
 use App\Repository\ProductRepository;
+use App\Repository\ProductFavoriteRepository;
+use App\Repository\ReviewRepository;
 use App\Security\BoutiqueContext;
 use App\State\Common\BoutiqueAwareProviderTrait;
 
@@ -22,6 +24,8 @@ final readonly class ProductProvider implements ProviderInterface
     public function __construct(
         private ProductRepository $products,
         private BoutiqueRepository $boutiques,
+        private ReviewRepository $reviews,
+        private ProductFavoriteRepository $favorites,
         private BoutiqueContext $context,
     ) {
     }
@@ -146,6 +150,9 @@ final readonly class ProductProvider implements ProviderInterface
         $output->createdAt = $product->getCreatedAt();
         $output->updatedAt = $product->getUpdatedAt();
         $output->viewsCount = $product->getViewsCount();
+        $output->reviewsCount = $this->reviews->countByProduct($product);
+        $output->rating = $this->reviews->getAverageRatingByProduct($product);
+        $output->favoritesCount = $this->favorites->countByProduct($product);
 
         return $output;
     }

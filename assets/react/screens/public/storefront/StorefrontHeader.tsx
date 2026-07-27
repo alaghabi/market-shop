@@ -4,12 +4,14 @@ import { BoutiqueAccountLink } from '../BoutiqueCustomerAccount';
 import { boutiqueLink } from '../boutiqueRouting';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
 import { CartSheet, type CartItem } from './CartSheet';
+import { FavoritesPopover } from './FavoritesPopover';
 import type { StoreBoutique } from './StorefrontTheme';
 
 const navigation = [
   { label: 'Accueil', path: '/' },
   { label: 'Catalogue', path: '/catalogue' },
   { label: 'Promotions', path: '/promotions' },
+  { label: 'Avis', path: '/avis' },
   { label: 'A propos', path: '/a-propos' },
   { label: 'Contact', path: '/contact' },
 ];
@@ -20,9 +22,13 @@ type StorefrontHeaderProps = {
   cartItems?: CartItem[];
   onSetCartQty?: (id: string, qty: number) => void;
   onRemoveCartItem?: (id: string) => void;
+  favoriteCount?: number;
+  onFavoritesRefresh?: () => void;
+  cartOpen?: boolean;
+  onCartOpenChange?: (open: boolean) => void;
 };
 
-export function StorefrontHeader({ boutique, showCart = true, cartItems, onSetCartQty, onRemoveCartItem }: StorefrontHeaderProps) {
+export function StorefrontHeader({ boutique, showCart = true, cartItems, onSetCartQty, onRemoveCartItem, favoriteCount = 0, onFavoritesRefresh, cartOpen, onCartOpenChange }: StorefrontHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -36,15 +42,15 @@ export function StorefrontHeader({ boutique, showCart = true, cartItems, onSetCa
           </div>
         </div>
       </div>
-      <header className="sticky top-0 z-40 border-b border-[color:var(--sf-outline,#DDD6FE)] bg-white/85 backdrop-blur-xl">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-30 border-b border-black/10 bg-[color:var(--sf-bg,#f6f2eb)]/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <button type="button" onClick={() => setMenuOpen(true)} className="sf-menu-toggle rounded-full p-2 text-[#171717] lg:hidden" aria-label="Menu">
             <Menu className="h-5 w-5" />
           </button>
-          <a href={boutiqueLink('/')} className="flex items-center gap-3 rounded-full focus:outline-none focus:ring-2 focus:ring-[color:var(--sf-accent,#22C55E)]">
+          <a href={boutiqueLink('/')} className="flex items-center gap-3">
             <ImageWithFallback src={boutique.logoUrl} alt={boutique.logoUrl ? boutique.name : 'Hanooti'} className="h-10 w-10 rounded-full object-cover" />
             <div>
-              <div className="text-xs uppercase tracking-[0.28em] text-black/50">N Collection</div>
+              <div className="text-xs uppercase tracking-[0.28em] text-black/50">{boutique.slogan || 'Boutique'}</div>
               <div className="text-lg font-semibold tracking-tight">{boutique.name}</div>
             </div>
           </a>
@@ -54,14 +60,15 @@ export function StorefrontHeader({ boutique, showCart = true, cartItems, onSetCa
           </nav>
 
           <div className="flex items-center gap-2">
-             {showCart && cartItems && onSetCartQty && onRemoveCartItem ? (
-               <CartSheet items={cartItems} onSetQty={onSetCartQty} onRemove={onRemoveCartItem} />
-             ) : showCart ? (
-               <a href={boutiqueLink('/cart')} aria-label="Panier" className="relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[color:var(--sf-outline,var(--ds-outline-variant))] p-0 text-[color:var(--sf-text-muted,var(--ds-on-surface-variant))] transition-colors hover:bg-[color:var(--sf-surface-muted,var(--ds-surface-container))] hover:text-[color:var(--sf-text,var(--ds-on-surface))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--sf-accent,var(--ds-primary,#111111))]">
-                 <ShoppingCart className="h-5 w-5" />
-               </a>
-             ) : null}
-            <BoutiqueAccountLink boutiqueSlug={boutique.slug} />
+            {boutique.wishlistEnabled === true && <FavoritesPopover boutiqueSlug={boutique.slug} favoriteCount={favoriteCount} onRefresh={onFavoritesRefresh} />}
+              {showCart && cartItems && onSetCartQty && onRemoveCartItem ? (
+                 <CartSheet items={cartItems} onSetQty={onSetCartQty} onRemove={onRemoveCartItem} open={cartOpen} onOpenChange={onCartOpenChange} />
+              ) : showCart ? (
+                 <a href={boutiqueLink('/cart')} aria-label="Panier" className="relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[color:var(--ds-primary)] p-0 text-[color:var(--sf-text-muted,var(--ds-on-surface-variant))] transition-colors hover:bg-[color:var(--sf-surface-muted,var(--ds-surface-container))] hover:text-[color:var(--sf-text,var(--ds-on-surface))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--sf-accent,var(--ds-primary,#111111))]">
+                  <ShoppingCart className="h-5 w-5" />
+                </a>
+               ) : null}
+              {boutique.customerAccountsEnabled !== false && <BoutiqueAccountLink boutiqueSlug={boutique.slug} />}
           </div>
         </div>
       </header>

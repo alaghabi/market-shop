@@ -87,7 +87,7 @@ export function BoutiqueAccountLink({ boutiqueSlug }: { boutiqueSlug: string }) 
   return (
     <a
       href={href}
-      className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-[color:var(--sf-outline,var(--ds-outline-variant))] text-[color:var(--sf-text-muted,var(--ds-on-surface-variant))] transition-colors hover:bg-[color:var(--sf-surface-muted,var(--ds-surface-container))] hover:text-[color:var(--sf-text,var(--ds-on-surface))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--sf-accent,var(--ds-primary))]"
+      className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-[color:var(--sf-accent,var(--sf-outline,var(--ds-outline-variant)))] text-[color:var(--sf-text-muted,var(--ds-on-surface-variant))] transition-colors hover:bg-[color:var(--sf-surface-muted,var(--ds-surface-container))] hover:text-[color:var(--sf-text,var(--ds-on-surface))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--sf-accent,var(--ds-primary))]"
       aria-label={session ? 'Ouvrir mon profil client' : 'Se connecter à la boutique'}
       title={session ? 'Mon profil' : 'Connexion client'}
     >

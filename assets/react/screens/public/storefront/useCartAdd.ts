@@ -14,7 +14,7 @@ export function useCartAdd({ boutiqueSlug, onAdded }: { boutiqueSlug: string; on
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', ...(authHeaders() ?? {}) },
-      body: JSON.stringify({ productId: product.id, quantity }),
+      body: JSON.stringify({ productId: product.id, quantity, variantId: product.variantId ?? null }),
     });
 
     if (!response.ok) {

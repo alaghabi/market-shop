@@ -78,10 +78,11 @@ class Cart extends AbstractEntity
         return $this->items;
     }
 
-    public function findItemForProduct(Product $product): ?CartItem
+    public function findItemForProduct(Product $product, ?ProductVariant $variant = null): ?CartItem
     {
         foreach ($this->items as $item) {
-            if ((string) $item->getProduct()?->getId() === (string) $product->getId()) {
+            if ((string) $item->getProduct()?->getId() === (string) $product->getId()
+                && (string) $item->getVariant()?->getId() === (string) $variant?->getId()) {
                 return $item;
             }
         }
@@ -89,9 +90,9 @@ class Cart extends AbstractEntity
         return null;
     }
 
-    public function addItem(Product $product, int $quantity): CartItem
+    public function addItem(Product $product, int $quantity, ?ProductVariant $variant = null): CartItem
     {
-        $item = $this->findItemForProduct($product);
+        $item = $this->findItemForProduct($product, $variant);
         if ($item instanceof CartItem) {
             $item->changeQuantity($item->getQuantity() + $quantity);
             $this->touch();
@@ -99,7 +100,7 @@ class Cart extends AbstractEntity
             return $item;
         }
 
-        $item = new CartItem($this, $product, $quantity, $product->getSellingPrice());
+        $item = new CartItem($this, $product, $quantity, $variant?->getSellingPrice() ?? $product->getSellingPrice(), $variant);
         $this->items->add($item);
         $this->touch();
 

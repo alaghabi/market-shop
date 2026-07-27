@@ -7,6 +7,7 @@ use ApiPlatform\State\ProviderInterface;
 use App\Dto\SubscriptionPlan\SubscriptionPlanOutput;
 use App\Entity\SubscriptionPlan;
 use App\Repository\SubscriptionPlanRepository;
+use App\Repository\SubscriptionModuleRepository;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /** @implements ProviderInterface<SubscriptionPlanOutput> */
@@ -14,6 +15,7 @@ final class SubscriptionPlanProvider implements ProviderInterface
 {
     public function __construct(
         private readonly SubscriptionPlanRepository $repository,
+        private readonly SubscriptionModuleRepository $subscriptionModules,
     ) {
     }
 
@@ -53,7 +55,8 @@ final class SubscriptionPlanProvider implements ProviderInterface
         $output->isFree = $entity->isFree();
         $output->isVisible = $entity->isVisible();
         $output->isActive = $entity->isActive();
-        $output->modules = $entity->getModules();
+        $allowedModuleCodes = $this->subscriptionModules->findAllowedModuleCodes($entity);
+        $output->modules = [] !== $allowedModuleCodes ? $allowedModuleCodes : $entity->getModules();
         $output->currency = $entity->getCurrency();
         $output->displayOrder = $entity->getDisplayOrder();
         $output->themes = array_map(

@@ -1,0 +1,103 @@
+- main [ref=f1e4]:
+  - generic [ref=f1e6]:
+    - generic [ref=f1e7]: Livraison offerte des 60 DT · Retours 30 jours
+    - generic [ref=f1e8]:
+      - link "contact@demo-beauty-lab.local" [ref=f1e9] [cursor=pointer]:
+        - /url: mailto:contact@demo-beauty-lab.local
+      - generic [ref=f1e10]: Support 7j/7
+  - generic [ref=f1e12]:
+    - link "Beauty Lab Demo N Collection Beauty Lab Demo" [ref=f1e13] [cursor=pointer]:
+      - /url: /
+      - img "Beauty Lab Demo" [ref=f1e14]
+      - generic [ref=f1e15]:
+        - generic [ref=f1e16]: N Collection
+        - generic [ref=f1e17]: Beauty Lab Demo
+    - navigation "Navigation boutique" [ref=f1e18]:
+      - link "Accueil" [ref=f1e19] [cursor=pointer]:
+        - /url: /
+      - link "Catalogue" [ref=f1e20] [cursor=pointer]:
+        - /url: /catalogue
+      - link "Promotions" [ref=f1e21] [cursor=pointer]:
+        - /url: /promotions
+      - link "A propos" [ref=f1e22] [cursor=pointer]:
+        - /url: /a-propos
+      - link "Contact" [ref=f1e23] [cursor=pointer]:
+        - /url: /contact
+    - generic [ref=f1e24]:
+      - button "Ouvrir le panier" [ref=f1e25] [cursor=pointer]:
+        - generic [ref=f1e29]: "2"
+      - button "Afficher mes favoris" [active] [ref=f1e30] [cursor=pointer]
+      - dialog [ref=f1e120]:
+        - generic [ref=f1e121]:
+          - generic [ref=f1e122]:
+            - heading "Mes favoris" [level=2] [ref=f1e123]
+            - paragraph [ref=f1e124]: 0 produit(s)
+          - button "Fermer les favoris" [ref=f1e125] [cursor=pointer]
+        - paragraph [ref=f1e129]: Aucun produit dans vos favoris.
+  - generic [ref=f1e35]:
+    - img "Doloremque unde voluptatem" [ref=f1e37]
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]:
+          - paragraph [ref=f1e41]: Maison premium
+          - heading "Doloremque unde voluptatem" [level=1] [ref=f1e42]
+        - generic [ref=f1e43]: "-21%"
+      - generic [ref=f1e45]:
+        - generic [ref=f1e46]: 5 vues
+        - generic [ref=f1e47]: ★ 0 avis
+        - generic [ref=f1e48]: ♡ 0 favoris
+      - generic [ref=f1e49]:
+        - generic [ref=f1e50]: 770.81 TND
+        - generic [ref=f1e51]: 973.15 TND
+      - generic [ref=f1e52]: En stock (7)
+      - generic [ref=f1e55]:
+        - paragraph [ref=f1e56]: Variante
+        - group "Finition" [ref=f1e57]:
+          - generic [ref=f1e59]:
+            - generic [ref=f1e60] [cursor=pointer]:
+              - radio "Standard" [checked] [ref=f1e61]
+              - generic [ref=f1e62]: Standard
+            - generic [ref=f1e63] [cursor=pointer]:
+              - radio "Premium" [ref=f1e64]
+              - generic [ref=f1e65]: Premium
+        - group "Couleur" [ref=f1e66]:
+          - generic [ref=f1e68]:
+            - generic [ref=f1e69] [cursor=pointer]:
+              - radio "Or" [checked] [ref=f1e70]
+              - generic [ref=f1e72]: Or
+            - generic [ref=f1e73] [cursor=pointer]:
+              - radio "Bleu" [ref=f1e74]
+              - generic [ref=f1e76]: Bleu
+      - paragraph [ref=f1e77]: Quia vel numquam atque cumque velit eaque repellat exercitationem. Minima qui velit autem eligendi nulla iure placeat. Aut ad fugit est quos. Ipsa quaerat facilis a maxime accusantium deleniti nesciunt. Harum illum veniam quam magni voluptatem commodi. Optio pariatur magnam minima ipsam maiores. Dolores alias quod iusto officiis non ut nobis ex.
+      - generic [ref=f1e78]:
+        - generic [ref=f1e79]:
+          - button "Diminuer la quantité" [ref=f1e80] [cursor=pointer]
+          - generic [ref=f1e83]: "1"
+          - button "Augmenter la quantité" [ref=f1e85] [cursor=pointer]
+        - button "Ajouter au panier" [ref=f1e88] [cursor=pointer]
+      - generic [ref=f1e91]:
+        - generic [ref=f1e92]: Paiement sécurisé
+        - generic [ref=f1e93]: Livraison rapide
+  - generic [ref=f1e95]:
+    - generic [ref=f1e96]:
+      - heading "Avis clients" [level=3] [ref=f1e98]
+      - generic [ref=f1e99]: 0 avis
+    - paragraph [ref=f1e101]: Aucun avis pour le moment. Soyez le premier !
+    - generic [ref=f1e102]:
+      - heading "Laisser un avis" [level=4] [ref=f1e103]
+      - generic [ref=f1e104]:
+        - generic [ref=f1e105]:
+          - generic [ref=f1e106]: Votre nom
+          - textbox "Jean Dupont" [ref=f1e107]
+        - generic [ref=f1e108]:
+          - generic [ref=f1e109]: Note
+          - generic [ref=f1e110]:
+            - button "1 étoile" [ref=f1e111] [cursor=pointer]: ★
+            - button "2 étoiles" [ref=f1e112] [cursor=pointer]: ★
+            - button "3 étoiles" [ref=f1e113] [cursor=pointer]: ★
+            - button "4 étoiles" [ref=f1e114] [cursor=pointer]: ★
+            - button "5 étoiles" [ref=f1e115] [cursor=pointer]: ★
+        - generic [ref=f1e116]:
+          - generic [ref=f1e117]: Commentaire (optionnel)
+          - textbox "Partagez votre expérience..." [ref=f1e118]
+        - button "Publier mon avis" [ref=f1e119] [cursor=pointer]

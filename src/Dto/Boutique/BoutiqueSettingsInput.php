@@ -99,7 +99,7 @@ final class BoutiqueSettingsInput
     public array $customerFieldConfig = [];
     /** @var array{email_notifications?: bool, sms_notifications?: bool, whatsapp_notifications?: bool} */
     public array $notificationConfig = [];
-    /** @var array{enable_reviews?: bool, enable_wishlist?: bool, enable_coupons?: bool, enable_blog?: bool, enable_brands?: bool, enable_multi_address?: bool} */
+    /** @var array{enable_reviews?: bool, enable_wishlist?: bool, enable_customer_auth?: bool, enable_coupons?: bool, enable_blog?: bool, enable_brands?: bool, enable_multi_address?: bool} */
     public array $moduleConfig = [];
     /** @var array{cod_enabled?: bool, bank_transfer_enabled?: bool, online_payment_enabled?: bool} */
     public array $paymentConfig = [];

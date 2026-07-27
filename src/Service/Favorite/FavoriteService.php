@@ -13,9 +13,11 @@ use App\Repository\BoutiqueRepository;
 use App\Repository\ProductFavoriteRepository;
 use App\Repository\ProductRepository;
 use App\Repository\ShopFavoriteRepository;
+use App\Service\Module\ModuleAccessService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -30,6 +32,7 @@ final readonly class FavoriteService
         private Security $security,
         private RequestStack $requestStack,
         private FavoriteCacheService $cache,
+        private ModuleAccessService $moduleAccess,
     ) {
     }
 
@@ -227,6 +230,10 @@ final readonly class FavoriteService
         $product = $this->products->find($productId);
         if (!$product instanceof Product || !$product->isActive() || !$product->getBoutique()->isVisiblePublicly()) {
             throw new NotFoundHttpException('Product not found.');
+        }
+
+        if (!$this->moduleAccess->isModuleEnabled('wishlist', $product->getBoutique())) {
+            throw new AccessDeniedHttpException('Les favoris ne sont pas activés pour cette boutique.');
         }
 
         return $product;

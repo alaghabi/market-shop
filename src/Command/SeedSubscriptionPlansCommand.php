@@ -29,10 +29,10 @@ final class SeedSubscriptionPlansCommand extends Command
             return Command::SUCCESS;
         }
 
-        $allModuleCodes = ['reviews', 'wishlist', 'loyalty', 'coupons', 'promotions', 'blog', 'brands', 'multi_address', 'chatbot', 'seo_advanced', 'custom_domain', 'analytics', 'delivery_tracking', 'wholesale', 'gift_cards', 'newsletter', 'abandoned_cart', 'order_printing', 'social_login', 'pos'];
+        $allModuleCodes = ['reviews', 'wishlist', 'customer_auth', 'loyalty', 'coupons', 'promotions', 'blog', 'brands', 'multi_address', 'chatbot', 'seo_advanced', 'custom_domain', 'analytics', 'delivery_tracking', 'wholesale', 'gift_cards', 'newsletter', 'abandoned_cart', 'order_printing', 'social_login', 'pos'];
 
-        $basicAllowed = ['reviews', 'wishlist', 'brands', 'social_login'];
-        $businessAllowed = ['reviews', 'wishlist', 'brands', 'social_login', 'coupons', 'promotions', 'multi_address', 'delivery_tracking', 'blog', 'analytics', 'newsletter', 'abandoned_cart', 'order_printing'];
+        $basicAllowed = ['reviews', 'wishlist', 'customer_auth', 'brands', 'social_login'];
+        $businessAllowed = ['reviews', 'wishlist', 'customer_auth', 'brands', 'social_login', 'coupons', 'promotions', 'multi_address', 'delivery_tracking', 'blog', 'analytics', 'newsletter', 'abandoned_cart', 'order_printing'];
 
         $plans = [
             [

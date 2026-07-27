@@ -22,9 +22,11 @@ type ChatBoxProps = {
   boutiqueId: string;
   apiBaseUrl: string;
   token?: string | null;
+  primaryColor?: string;
 };
 
-export function ChatBox({ boutiqueId, apiBaseUrl, token }: ChatBoxProps) {
+export function ChatBox({ boutiqueId, apiBaseUrl, token, primaryColor }: ChatBoxProps) {
+  const accent = primaryColor ?? 'var(--sf-accent, var(--ds-primary, #111111))';
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -242,7 +244,7 @@ export function ChatBox({ boutiqueId, apiBaseUrl, token }: ChatBoxProps) {
             height: '56px',
             borderRadius: '50%',
             border: 'none',
-             background: 'var(--sf-accent, var(--ds-primary, #111111))',
+             background: accent,
             color: '#fff',
             fontSize: '24px',
             cursor: 'pointer',
@@ -270,7 +272,7 @@ export function ChatBox({ boutiqueId, apiBaseUrl, token }: ChatBoxProps) {
             justifyContent: 'space-between',
             alignItems: 'center',
             padding: '12px 16px',
-             background: 'var(--sf-accent, var(--ds-primary, #111111))',
+             background: accent,
             color: '#fff',
           }}>
             <strong>Support</strong>
@@ -309,7 +311,7 @@ export function ChatBox({ boutiqueId, apiBaseUrl, token }: ChatBoxProps) {
               <button
                 onClick={startConversation}
                 disabled={loading || !guestName.trim()}
-                style={sendBtnStyle}
+                style={sendBtnStyle(accent)}
               >
                 {loading ? 'Envoi...' : 'Démarrer la conversation'}
               </button>
@@ -336,7 +338,7 @@ export function ChatBox({ boutiqueId, apiBaseUrl, token }: ChatBoxProps) {
                     key={msg.id}
                     style={{
                       alignSelf: msg.senderType === 'user' ? 'flex-end' : 'flex-start',
-                       background: msg.senderType === 'user' ? 'var(--sf-accent, var(--ds-primary, #111111))' : '#f0f0f0',
+                       background: msg.senderType === 'user' ? accent : '#f0f0f0',
                       color: msg.senderType === 'user' ? '#fff' : '#333',
                       padding: '8px 12px',
                       borderRadius: '12px',
@@ -354,7 +356,7 @@ export function ChatBox({ boutiqueId, apiBaseUrl, token }: ChatBoxProps) {
                             style={{ maxWidth: '100%', borderRadius: '8px' }}
                           />
                         ) : (
-                           <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: msg.senderType === 'user' ? '#fff' : 'var(--sf-accent, var(--ds-primary, #111111))' }}>
+                           <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: msg.senderType === 'user' ? '#fff' : accent }}>
                             📎 Fichier joint
                           </a>
                         )}
@@ -433,7 +435,7 @@ export function ChatBox({ boutiqueId, apiBaseUrl, token }: ChatBoxProps) {
                   type="submit"
                   disabled={!content.trim() || uploading}
                   style={{
-                     background: 'var(--sf-accent, var(--ds-primary, #111111))',
+            background: accent,
                     color: '#fff',
                     border: 'none',
                     borderRadius: '20px',
@@ -463,16 +465,18 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-const sendBtnStyle: React.CSSProperties = {
-  background: 'var(--sf-accent, var(--ds-primary, #111111))',
-  color: '#fff',
-  border: 'none',
-  borderRadius: '8px',
-  padding: '10px 16px',
-  cursor: 'pointer',
-  fontSize: '14px',
-  fontWeight: 600,
-};
+function sendBtnStyle(accent: string): React.CSSProperties {
+  return {
+    background: accent,
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '10px 16px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 600,
+  };
+}
 
 function readCookie<T>(name: string): T | null {
   const cookie = document.cookie.split('; ').find((item) => item.startsWith(`${name}=`));

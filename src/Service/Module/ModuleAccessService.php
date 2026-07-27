@@ -5,7 +5,9 @@ namespace App\Service\Module;
 use App\Entity\Boutique;
 use App\Entity\SubscriptionPlan;
 use App\Entity\SubscriptionPlanModule;
+use App\Enum\ExtensionType;
 use App\Enum\SubscriptionStatus;
+use App\Repository\BoutiqueExtensionRepository;
 use App\Repository\PlatformModuleRepository;
 use App\Repository\ShopModuleRepository;
 use App\Repository\SubscriptionModuleRepository;
@@ -18,6 +20,7 @@ final readonly class ModuleAccessService
         private PlatformModuleRepository $platformModules,
         private ShopModuleRepository $shopModules,
         private SubscriptionModuleRepository $subscriptionModules,
+        private BoutiqueExtensionRepository $boutiqueExtensions,
         private EntityManagerInterface $em,
         private ModuleCacheService $cache,
         private AppConfigService $appConfig,
@@ -92,7 +95,8 @@ final readonly class ModuleAccessService
 
         $cached = $this->cache->getPlanModules($planId);
         if (null !== $cached) {
-            return !isset($cached[$module->getCode()]) || $cached[$module->getCode()];
+            return (isset($cached[$module->getCode()]) && $cached[$module->getCode()])
+                || $this->hasActiveModuleExtension($boutique, $module->getCode());
         }
 
         $allowedCodes = $this->subscriptionModules->findAllowedModuleCodes($plan);
@@ -109,7 +113,8 @@ final readonly class ModuleAccessService
 
         $this->cache->setPlanModules($planId, $allowedMap);
 
-        return isset($allowedMap[$module->getCode()]);
+        return isset($allowedMap[$module->getCode()])
+            || $this->hasActiveModuleExtension($boutique, $module->getCode());
     }
 
     public function isEnabledInBoutique(SubscriptionPlanModule $module, Boutique $boutique): bool
@@ -216,6 +221,25 @@ final readonly class ModuleAccessService
     private function findAllModules(): array
     {
         return $this->em->getRepository(SubscriptionPlanModule::class)->findBy([], ['category' => 'ASC', 'name' => 'ASC']);
+    }
+
+    private function hasActiveModuleExtension(Boutique $boutique, string $moduleCode): bool
+    {
+        $now = new \DateTimeImmutable();
+
+        foreach ($this->boutiqueExtensions->findActiveByBoutique($boutique) as $grant) {
+            $extension = $grant->getExtension();
+            if (!$extension->isActive()
+                || ExtensionType::Module !== $extension->getType()
+                || $moduleCode !== $extension->getTargetCode()
+                || $grant->isExpired($now)) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     private function moduleConfigKey(string $moduleCode): ?string

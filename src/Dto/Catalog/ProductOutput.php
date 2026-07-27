@@ -55,6 +55,9 @@ final class ProductOutput
     public array $filterValues = [];
     public int $ordersCount = 0;
     public int $viewsCount = 0;
+    public int $reviewsCount = 0;
+    public ?float $rating = null;
+    public int $favoritesCount = 0;
     public float $revenue = 0.0;
     public \DateTimeImmutable $createdAt;
     public ?\DateTimeImmutable $updatedAt;

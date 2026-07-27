@@ -2,18 +2,26 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ImageWithFallback } from '../../components/ImageWithFallback';
-import { Minus, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { appIcons } from '../../icons/fontAwesome';
 import { Badge, Button, Card } from '../../components/ui';
 import { authHeaders, boutiqueLink, boutiqueQuery, resolveBoutiqueSlug } from './boutiqueRouting';
 import { applyStorefrontTheme, resetStorefrontTheme, type StorefrontThemeData } from '../../theme/storefrontThemeRoot';
 import { StorefrontHeader } from './storefront/StorefrontHeader';
 import type { StoreBoutique } from './storefront/StorefrontTheme';
+import { VariantSelector } from './storefront/VariantSelector';
 
 type BoutiqueItem = StorefrontThemeData & {
   id: string;
   name: string;
   slug: string;
+  logoUrl?: string | null;
+  slogan?: string | null;
+  primaryColor: string;
+  reviewsEnabled?: boolean;
+  wishlistEnabled?: boolean;
+  viewsEnabled?: boolean;
+  coverImage?: string | null;
 };
 
 type CartItem = {
@@ -22,7 +30,35 @@ type CartItem = {
   quantity: number;
   unitPriceCents: number;
   totalCents: number;
+  variantId?: string | null;
+  variantSku?: string | null;
+  variantAttributes?: Array<{ name: string; value: string }>;
+  availableVariants?: Array<{
+    id: string;
+    sku?: string | null;
+    sellingPrice: number;
+    quantity: number;
+    attributes: Array<{ name: string; value: string }>;
+  }>;
 };
+
+function findVariantIdForAttribute(item: CartItem, attributeName: string, value: string): string | null {
+  if (!value || !item.availableVariants) return null;
+
+  const selectedAttributes = new Map((item.variantAttributes ?? []).map((attribute) => [attribute.name, attribute.value]));
+  selectedAttributes.set(attributeName, value);
+
+  const exactMatch = item.availableVariants.find((variant) => (
+    variant.quantity > 0
+    && variant.attributes.length === selectedAttributes.size
+    && variant.attributes.every((attribute) => selectedAttributes.get(attribute.name) === attribute.value)
+  ));
+
+  return exactMatch?.id ?? item.availableVariants.find((variant) => (
+    variant.quantity > 0
+    && variant.attributes.some((attribute) => attribute.name === attributeName && attribute.value === value)
+  ))?.id ?? null;
+}
 
 type CartOutput = {
   id: string;
@@ -37,6 +73,7 @@ export function CartPage() {
   const boutiqueSlug = resolveBoutiqueSlug(/^\/boutiques\/([^/]+)\/cart/);
   const [boutique, setBoutique] = useState<BoutiqueItem | null>(null);
   const [cart, setCart] = useState<CartOutput | null>(null);
+  const [favoritesCount, setFavoritesCount] = useState(0);
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,11 +90,20 @@ export function CartPage() {
         setBoutique(payload);
         if (!payload) return null;
 
-         return fetch(`/api/cart${boutiqueQuery(boutiqueSlug)}`, { headers });
+        return fetch(`/api/cart${boutiqueQuery(boutiqueSlug)}`, { headers });
       })
       .then((response) => response && response.ok ? response.json() : null)
       .then((payload: CartOutput | null) => {
         if (payload) setCart(payload);
+      })
+      .catch(() => {});
+
+    // Fetch favorites count
+    fetch(`/api/favorites/products${boutiqueQuery(boutiqueSlug)}`, { credentials: 'same-origin', headers })
+      .then((response) => response.ok ? response.json() : [])
+      .then((payload: any) => {
+        const items = Array.isArray(payload) ? payload : payload.member ?? payload.items ?? payload['hydra:member'] ?? [];
+        setFavoritesCount(items.length);
       })
       .catch(() => {});
 
@@ -86,7 +132,7 @@ export function CartPage() {
     }
   };
 
-  const updateQuantity = async (itemId: string, quantity: number) => {
+  const updateQuantity = async (itemId: string, quantity: number, variantId?: string | null) => {
     if (quantity < 1) {
       await removeItem(itemId);
       return;
@@ -98,7 +144,7 @@ export function CartPage() {
       const response = await fetch(`/api/cart/items/${itemId}${boutiqueQuery(boutiqueSlug)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/merge-patch+json', ...authHeaders() },
-        body: JSON.stringify({ quantity }),
+        body: JSON.stringify({ quantity, variantId: variantId ?? null }),
       });
       if (!response.ok) throw new Error('Impossible de modifier la quantité.');
 
@@ -120,7 +166,7 @@ export function CartPage() {
 
   return (
     <main className="ds-shell min-h-screen bg-[color:var(--sf-bg,#f6f2eb)] text-[color:var(--sf-text,#171717)]">
-      {boutique && <StorefrontHeader boutique={boutique as StoreBoutique} showCart={false} />}
+      {boutique && <StorefrontHeader boutique={boutique as StoreBoutique} showCart={false} cartItems={cart?.items.map(i => ({ itemId: i.id, product: { id: i.id, name: i.productName ?? 'Produit', slug: '', priceCents: i.unitPriceCents, currency: currency, images: [] }, qty: i.quantity })) ?? []} favoriteCount={favoritesCount} />}
       <section className="ds-page py-8 md:py-12">
         <div className="ds-grid ds-grid--split">
           <Card>
@@ -148,28 +194,49 @@ export function CartPage() {
                   <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-[color:var(--sf-surface-muted,#ece5d9)] text-[color:var(--sf-accent,#111111)]">
                     <FontAwesomeIcon icon={appIcons.products} />
                   </div>
-                  <div className="flex-1">
-                    <strong>{item.productName ?? 'Produit'}</strong>
-                    <div className="mt-2 flex items-center gap-2 text-sm text-[color:var(--sf-text-muted,#6b6560)]">
+                   <div className="flex-1">
+                     <strong>{item.productName ?? 'Produit'}</strong>
+                    {item.variantAttributes && item.variantAttributes.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {item.variantAttributes.map((attribute) => (
+                          <span key={`${attribute.name}-${attribute.value}`} className="rounded-full bg-[color:var(--sf-surface-muted,#ece5d9)] px-2 py-0.5 text-xs text-[color:var(--sf-text-muted,#6b6560)]">
+                            {attribute.name}: {attribute.value}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {item.variantSku && <div className="mt-1 text-xs text-[color:var(--sf-text-muted,#6b6560)]">Réf. {item.variantSku}</div>}
+                    {item.availableVariants && item.availableVariants.length > 0 && (
+                      <div className="mt-3">
+                        <VariantSelector
+                          variants={item.availableVariants}
+                          selectedAttributes={Object.fromEntries((item.variantAttributes ?? []).map((attribute) => [attribute.name, attribute.value]))}
+                          onSelect={(name, value) => { void updateQuantity(item.id, item.quantity, findVariantIdForAttribute(item, name, value)); }}
+                          idPrefix={item.id}
+                          disabled={updatingItemId === item.id || removingItemId === item.id}
+                        />
+                      </div>
+                    )}
+                    <div className="mt-2 flex items-center justify-center gap-2 text-sm text-[color:var(--sf-text-muted,#6b6560)]">
                       <span>Qté:</span>
                       <button
                         type="button"
-                        className="grid h-8 w-8 cursor-pointer place-items-center rounded-full border border-[color:var(--sf-outline,var(--ds-outline-variant))] text-[color:var(--sf-text,var(--ds-on-surface))] transition-colors hover:bg-[color:var(--sf-surface-muted,var(--ds-surface-container))] disabled:cursor-not-allowed disabled:opacity-50"
+                         className="sf-quantity-control cursor-pointer transition-colors hover:bg-[color:var(--sf-surface-muted,#F3E8FF)] disabled:cursor-not-allowed disabled:opacity-50"
                         aria-label={`Diminuer la quantité de ${item.productName ?? 'cet article'}`}
                         disabled={removingItemId === item.id || updatingItemId === item.id}
-                        onClick={() => { void updateQuantity(item.id, item.quantity - 1); }}
+                        onClick={() => { void updateQuantity(item.id, item.quantity - 1, item.variantId); }}
                       >
-                        <Minus className="h-3.5 w-3.5" aria-hidden="true" />
+                         <ChevronLeft className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
                       </button>
                       <strong className="min-w-6 text-center text-[color:var(--sf-text,var(--ds-on-surface))]">{item.quantity}</strong>
                       <button
                         type="button"
-                        className="grid h-8 w-8 cursor-pointer place-items-center rounded-full border border-[color:var(--sf-outline,var(--ds-outline-variant))] text-[color:var(--sf-text,var(--ds-on-surface))] transition-colors hover:bg-[color:var(--sf-surface-muted,var(--ds-surface-container))] disabled:cursor-not-allowed disabled:opacity-50"
+                         className="sf-quantity-control cursor-pointer transition-colors hover:bg-[color:var(--sf-surface-muted,#F3E8FF)] disabled:cursor-not-allowed disabled:opacity-50"
                         aria-label={`Augmenter la quantité de ${item.productName ?? 'cet article'}`}
                         disabled={removingItemId === item.id || updatingItemId === item.id}
-                        onClick={() => { void updateQuantity(item.id, item.quantity + 1); }}
+                        onClick={() => { void updateQuantity(item.id, item.quantity + 1, item.variantId); }}
                       >
-                        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                         <ChevronRight className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
                       </button>
                     </div>
                   </div>

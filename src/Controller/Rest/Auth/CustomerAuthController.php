@@ -10,6 +10,7 @@ use App\Repository\CustomerRepository;
 use App\Repository\CustomerAuthProviderRepository;
 use App\Security\LocalTokenManager;
 use App\Service\Subscription\SubscriptionManager;
+use App\Service\Module\ModuleAccessService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -26,6 +27,7 @@ final class CustomerAuthController
         private LocalTokenManager $tokens,
         private Security $security,
         private SubscriptionManager $subscriptionManager,
+        private ModuleAccessService $moduleAccess,
     ) {
     }
 
@@ -267,6 +269,12 @@ final class CustomerAuthController
         $boutique = $request->attributes->get('_boutique');
         if (!$boutique instanceof Boutique) {
             throw new NotFoundHttpException('Boutique not found.');
+        }
+
+        $moduleConfig = $boutique->getSettings()?->getModuleConfig() ?? [];
+        if (!$this->moduleAccess->isModuleEnabled('customer_auth', $boutique)
+            || (array_key_exists('enable_customer_auth', $moduleConfig) && false === (bool) $moduleConfig['enable_customer_auth'])) {
+            throw new NotFoundHttpException('Customer accounts are not enabled for this boutique.');
         }
 
         return $boutique;

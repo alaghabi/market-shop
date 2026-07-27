@@ -31,6 +31,7 @@ final class SeedSubscriptionModulesCommand extends Command
         ['code' => 'newsletter', 'name' => 'Newsletter', 'description' => 'Campagnes email', 'category' => 'marketing', 'icon' => 'envelope', 'isCore' => false],
         ['code' => 'abandoned_cart', 'name' => 'Panier abandonné', 'description' => 'Récupération de paniers', 'category' => 'marketing', 'icon' => 'cart-plus', 'isCore' => false],
         ['code' => 'order_printing', 'name' => 'Impression de commandes', 'description' => 'Bons de livraison et factures', 'category' => 'commandes', 'icon' => 'print', 'isCore' => false],
+        ['code' => 'customer_auth', 'name' => 'Comptes clients', 'description' => 'Connexion et comptes clients de la boutique', 'category' => 'auth', 'icon' => 'user-round', 'isCore' => false],
         ['code' => 'social_login', 'name' => 'Connexion sociale', 'description' => 'Facebook, Google, Apple', 'category' => 'auth', 'icon' => 'user-check', 'isCore' => true],
         ['code' => 'pos', 'name' => 'Point de vente', 'description' => 'Caisse enregistreuse', 'category' => 'boutique', 'icon' => 'cash-register', 'isCore' => false],
     ];
@@ -43,28 +44,27 @@ final class SeedSubscriptionModulesCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $existing = $this->em->getRepository(SubscriptionPlanModule::class)->findAll();
-        if (count($existing) > 0) {
-            $output->writeln('Modules already seeded ('.count($existing).' found).');
-
-            return Command::SUCCESS;
-        }
-
+        $repository = $this->em->getRepository(SubscriptionPlanModule::class);
+        $created = 0;
         foreach (self::MODULES as $data) {
-            $module = new SubscriptionPlanModule(
-                code: $data['code'],
-                name: $data['name'],
-                description: $data['description'],
-                category: $data['category'],
-                icon: $data['icon'],
-                isCore: $data['isCore'],
-            );
-            $this->em->persist($module);
+            $module = $repository->findOneBy(['code' => $data['code']]);
+            if (null === $module) {
+                $module = new SubscriptionPlanModule(
+                    code: $data['code'],
+                    name: $data['name'],
+                    description: $data['description'],
+                    category: $data['category'],
+                    icon: $data['icon'],
+                    isCore: $data['isCore'],
+                );
+                $this->em->persist($module);
+                ++$created;
+            }
         }
 
         $this->em->flush();
 
-        $output->writeln(sprintf('Seeded %d subscription plan modules.', count(self::MODULES)));
+        $output->writeln(sprintf('Subscription plan modules synchronized (%d created).', $created));
 
         return Command::SUCCESS;
     }

@@ -141,6 +141,56 @@ final class ReviewRepository extends ServiceEntityRepository
             ->getSingleScalarResult();
     }
 
+    public function existsForUserAndProduct(\App\Entity\User $user, Product $product): bool
+    {
+        return 0 < (int) $this->createQueryBuilder('review')
+            ->select('COUNT(review.id)')
+            ->andWhere('review.user = :user')
+            ->andWhere('review.product = :product')
+            ->setParameter('user', $user)
+            ->setParameter('product', $product)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    public function existsForUserAndBoutique(\App\Entity\User $user, Boutique $boutique): bool
+    {
+        return 0 < (int) $this->createQueryBuilder('review')
+            ->select('COUNT(review.id)')
+            ->andWhere('review.user = :user')
+            ->andWhere('review.product IS NULL')
+            ->andWhere('review.boutique = :boutique')
+            ->setParameter('user', $user)
+            ->setParameter('boutique', $boutique)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    public function existsForBrowserAndProduct(string $browserHash, Product $product): bool
+    {
+        return 0 < (int) $this->createQueryBuilder('review')
+            ->select('COUNT(review.id)')
+            ->andWhere('review.browserHash = :browserHash')
+            ->andWhere('review.product = :product')
+            ->setParameter('browserHash', $browserHash)
+            ->setParameter('product', $product)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    public function existsForBrowserAndBoutique(string $browserHash, Boutique $boutique): bool
+    {
+        return 0 < (int) $this->createQueryBuilder('review')
+            ->select('COUNT(review.id)')
+            ->andWhere('review.browserHash = :browserHash')
+            ->andWhere('review.product IS NULL')
+            ->andWhere('review.boutique = :boutique')
+            ->setParameter('browserHash', $browserHash)
+            ->setParameter('boutique', $boutique)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     public function existsForIpAndBoutique(string $ipHash, Boutique $boutique): bool
     {
         return 0 < (int) $this->createQueryBuilder('review')

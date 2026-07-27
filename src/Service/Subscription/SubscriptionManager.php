@@ -265,7 +265,7 @@ final readonly class SubscriptionManager
     {
         foreach ($this->boutiqueExtensions->findActiveByBoutique($boutique) as $grant) {
             $extension = $grant->getExtension();
-            if ($extensionCode === $extension->getCode() && !$grant->isExpired(new \DateTimeImmutable())) {
+            if ($extension->isActive() && $extensionCode === $extension->getCode() && !$grant->isExpired(new \DateTimeImmutable())) {
                 return true;
             }
         }
@@ -306,7 +306,10 @@ final readonly class SubscriptionManager
         $now = new \DateTimeImmutable();
         foreach ($this->boutiqueExtensions->findActiveByBoutique($boutique) as $grant) {
             $extension = $grant->getExtension();
-            if ($extension->getType() === $type && $extension->getTargetCode() === $targetCode && !$grant->isExpired($now)) {
+            if ($extension->isActive()
+                && $extension->getType() === $type
+                && $extension->getTargetCode() === $targetCode
+                && !$grant->isExpired($now)) {
                 return true;
             }
         }

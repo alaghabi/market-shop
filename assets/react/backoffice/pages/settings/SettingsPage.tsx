@@ -29,7 +29,7 @@ type BoutiqueSettings = {
   enableEmailVerification?: boolean; enableCustomerEmailVerification?: boolean;
   orderMode?: string; maintenance?: boolean;
   metaPixelId?: string;
-  theme?: string;
+   theme?: string; moduleConfig?: { enable_customer_auth?: boolean };
 };
 
 type BoutiqueSettingsResponse = {
@@ -57,7 +57,7 @@ type BoutiqueSettingsResponse = {
   maintenanceMode?: boolean | null;
   maintenance?: boolean | null;
   metaPixelId?: string | null;
-  theme?: string | null;
+   theme?: string | null; moduleConfig?: { enable_customer_auth?: boolean };
 };
 
 const FONT_OPTIONS = [
@@ -180,7 +180,8 @@ export function SettingsPage({ getAccessToken }: { getAccessToken: () => string 
       colorPalette: data.colorPalette ?? {},
       fontFamily: data.fontFamily ?? '', fontSize: data.fontSize ?? '', borderRadius: data.borderRadius ?? '',
       enableEmailVerification: !!data.enableEmailVerification,
-      enableCustomerEmailVerification: !!data.enableCustomerEmailVerification,
+       enableCustomerEmailVerification: !!data.enableCustomerEmailVerification,
+       moduleConfig: { ...(data.moduleConfig ?? {}), enable_customer_auth: data.moduleConfig?.enable_customer_auth !== false },
       orderMode: data.orderMode ?? 'standard', maintenance: !!(data.maintenanceMode ?? data.maintenance),
       metaPixelId: data.metaPixelId ?? '',
       theme: data.theme ?? enrichedThemes.find((t) => t.isDefault)?.code ?? enrichedThemes[0]?.code ?? '',
@@ -332,6 +333,7 @@ export function SettingsPage({ getAccessToken }: { getAccessToken: () => string 
               </div>
               <div className="bo-form-row">
                 <label className="bo-checkbox"><input type="checkbox" checked={!!form.maintenance} onChange={(e) => setForm((f) => ({ ...f, maintenance: e.target.checked }))} /> Mode maintenance</label>
+                <label className="bo-checkbox"><input type="checkbox" checked={form.moduleConfig?.enable_customer_auth !== false} onChange={(e) => setForm((f) => ({ ...f, moduleConfig: { ...(f.moduleConfig ?? {}), enable_customer_auth: e.target.checked } }))} /> Comptes clients activés</label>
               </div>
               <h3 style={{ marginTop: 24 }}>Suivi & Tracking</h3>
               <FormField label="Meta Pixel ID" hint="Nécessite le module Analytics et l'extension Meta Pixel">

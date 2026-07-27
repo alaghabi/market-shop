@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ChatBox } from '../../chat/ChatBox';
-import { HanootiMarketplaceTemplate } from './storefront/HanootiMarketplaceTemplate';
 import { StorefrontTheme, type StoreBoutique, type StoreProduct } from './storefront/StorefrontTheme';
 import { applyStorefrontTheme, resetStorefrontTheme } from '../../theme/storefrontThemeRoot';
+import { getStorefrontThemePreset } from '../../theme/themes';
 import { authHeaders, boutiqueQuery, isBoutiqueSubdomain, resolveBoutiqueSlug } from './boutiqueRouting';
 import { frontOfficeUrl } from '../../backoffice/utils/frontOfficeUrl';
 import type { StoreCategory, StoreFilter } from './storefront/catalogueTypes';
@@ -24,14 +24,32 @@ type StorefrontBoutiqueResponse = {
   primaryColor?: string | null;
   colorPalette?: Record<string, string> | null;
   iconSet?: Record<string, never>;
-  featuredCategories?: [];
-  frontOfficePages?: [];
-  navigationItems?: [];
+  featuredCategories?: Array<{ categoryId?: string; label?: string; position?: number }>;
+  frontOfficePages?: Array<{ slug?: string; label?: string; enabled?: boolean; position?: number }>;
+  navigationItems?: Array<{ label?: string; href?: string; position?: number; enabled?: boolean }>;
+  homepageSections?: Array<{ type: string; enabled: boolean; position?: number; title?: string }>;
+  banners?: Array<{ image?: string; mobile_image?: string; title?: string; subtitle?: string; button_text?: string; button_url?: string; active?: boolean; position?: number }>;
+  catalogConfig?: Record<string, unknown>;
+  moduleConfig?: Record<string, unknown>;
+  orderMode?: string | null;
+  socialLinks?: Record<string, string>;
+  slogan?: string | null;
+  favicon?: string | null;
+  maintenanceMessage?: string | null;
+  headerConfig?: Record<string, boolean>;
+  footerConfig?: Record<string, string | boolean>;
   theme?: string | null;
   fontFamily?: string | null;
   fontSize?: string | null;
   borderRadius?: string | null;
   reviewsEnabled?: boolean;
+  wishlistEnabled?: boolean;
+  analyticsEnabled?: boolean;
+  viewsEnabled?: boolean;
+  customerAccountsEnabled?: boolean;
+  customersWithAccount?: number;
+  customersWithoutAccount?: number;
+  publicOrdersCount?: number;
 };
 
 type ProductResponse = {
@@ -52,10 +70,13 @@ type ProductResponse = {
   categoryIds?: string[];
   brandName?: string | null;
   filterValues?: Array<{ filterId: string; filterName: string; filterSlug: string; value: string }>;
+  variants?: StoreProduct['variants'];
   stockQuantity?: number;
   badge?: string | null;
   rating?: number;
   reviewsCount?: number;
+  favoritesCount?: number;
+  viewsCount?: number;
   createdAt?: string | null;
 };
 
@@ -88,6 +109,7 @@ export function StorefrontPage({ title, description }: { title: string; descript
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [categories, setCategories] = useState<StoreCategory[]>([]);
   const [filters, setFilters] = useState<StoreFilter[]>([]);
+  const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -107,34 +129,73 @@ export function StorefrontPage({ title, description }: { title: string; descript
             slug: data.slug ?? boutiqueSlug,
             status: data.status,
             customDomain: data.customDomain,
-          });
-          const targetUrl = '/' === pathSuffix ? canonicalUrl : `${canonicalUrl}${pathSuffix}`;
-          if (targetUrl !== window.location.href) {
-            window.location.replace(targetUrl);
-            return;
-          }
+           });
+           const targetUrl = '/' === pathSuffix ? canonicalUrl : `${canonicalUrl}${pathSuffix}`;
+           if (new URL(targetUrl, window.location.href).href !== window.location.href) {
+             window.location.replace(targetUrl);
+             return;
+           }
         }
 
-        applyStorefrontTheme(data);
-        setBoutique({
-          id: data.id ?? '',
-          name: data.name ?? '',
-          slug: data.slug ?? boutiqueSlug,
-           logoUrl: data.logoUrl ?? null,
-           description: data.description ?? `${title} — ${description}`,
-           coverImage: data.coverImage ?? null,
-            backgroundColor: data.backgroundColor ?? data.colorPalette?.background ?? null,
-           colorPalette: data.colorPalette ?? null,
-           email: data.contactEmail ?? null,
-          address: data.address ?? null,
-          primaryColor: data.primaryColor ?? undefined,
-            heroTitle: title,
-            heroSubtitle: description,
-            theme: data.theme ?? null,
-            fontFamily: data.fontFamily ?? null,
-            fontSize: data.fontSize ?? null,
+         const themeCode = data.theme ?? 'hanooti-marketplace';
+         const preset = getStorefrontThemePreset(themeCode);
+         const themeData = data.theme || !preset
+           ? { ...data, theme: themeCode }
+           : { ...data, theme: themeCode, colorPalette: preset.colorPalette };
+
+         applyStorefrontTheme(themeData);
+         setBoutique({
+           id: data.id ?? '',
+           name: data.name ?? '',
+           slug: data.slug ?? boutiqueSlug,
+            logoUrl: themeData.logoUrl ?? null,
+            description: themeData.description ?? `${title} — ${description}`,
+            coverImage: themeData.coverImage ?? null,
+             backgroundColor: themeData.backgroundColor ?? themeData.colorPalette?.background ?? null,
+            colorPalette: themeData.colorPalette ?? null,
+            email: themeData.contactEmail ?? null,
+           address: themeData.address ?? null,
+           primaryColor: themeData.primaryColor ?? undefined,
+             heroTitle: data.slogan ?? title,
+             heroSubtitle: data.description ?? description,
+             theme: themeCode,
+             fontFamily: themeData.fontFamily ?? null,
+             fontSize: themeData.fontSize ?? null,
+             borderRadius: themeData.borderRadius ?? preset?.borderRadius ?? null,
+             slogan: themeData.slogan ?? null,
+             favicon: themeData.favicon ?? null,
+             socialLinks: themeData.socialLinks ?? {},
+             headerConfig: themeData.headerConfig ?? {},
+             footerConfig: themeData.footerConfig ?? {},
+             navigationItems: themeData.navigationItems ?? [],
+             frontOfficePages: themeData.frontOfficePages ?? [],
+             featuredCategories: themeData.featuredCategories ?? [],
+             homepageSections: themeData.homepageSections ?? [],
+             banners: themeData.banners ?? [],
+             catalogConfig: themeData.catalogConfig ?? {},
+             moduleConfig: themeData.moduleConfig ?? {},
+             orderMode: themeData.orderMode ?? null,
+             maintenanceMessage: themeData.maintenanceMessage ?? null,
             reviewsEnabled: data.reviewsEnabled === true,
-        });
+            wishlistEnabled: data.wishlistEnabled === true,
+            analyticsEnabled: data.analyticsEnabled === true,
+            viewsEnabled: data.viewsEnabled === true,
+           customerAccountsEnabled: data.customerAccountsEnabled !== false,
+           customersWithAccount: data.customersWithAccount ?? 0,
+           customersWithoutAccount: data.customersWithoutAccount ?? 0,
+           publicOrdersCount: data.publicOrdersCount ?? 0,
+         });
+         if (data.wishlistEnabled === true) {
+           fetch('/api/favorites/products', { headers, credentials: 'same-origin' })
+             .then((response) => response.ok ? response.json() : [])
+              .then((payload: Array<{ productId?: string }> | { member?: Array<{ productId?: string }>; items?: Array<{ productId?: string }>; 'hydra:member'?: Array<{ productId?: string }> }) => {
+                const favorites = Array.isArray(payload) ? payload : payload.member ?? payload.items ?? payload['hydra:member'] ?? [];
+               setFavoriteProductIds(favorites.map((favorite) => favorite.productId).filter((id): id is string => Boolean(id)));
+             })
+             .catch(() => setFavoriteProductIds([]));
+         } else {
+           setFavoriteProductIds([]);
+         }
       })
       .catch(() => {})
       .finally(() => setLoaded(true));
@@ -184,15 +245,29 @@ export function StorefrontPage({ title, description }: { title: string; descript
     );
   }
 
+  async function toggleFavorite(productId: string): Promise<void> {
+    if (!boutique?.wishlistEnabled) return;
+
+    const isFavorite = favoriteProductIds.includes(productId);
+    const response = await fetch(`/api/favorites/products/${productId}`, {
+      method: isFavorite ? 'DELETE' : 'POST',
+      credentials: 'same-origin',
+      headers: authHeaders(),
+    });
+
+    if (!response.ok) return;
+
+     setFavoriteProductIds((current) => isFavorite ? current.filter((id) => id !== productId) : [...current, productId]);
+     setProducts((current) => current.map((product) => product.id === productId
+       ? { ...product, favoritesCount: Math.max(0, (product.favoritesCount ?? 0) + (isFavorite ? -1 : 1)) }
+       : product));
+  }
+
   return (
     <>
-      {boutique.theme === 'hanooti-marketplace' ? (
-        <HanootiMarketplaceTemplate boutique={boutique} products={products} categories={categories} filters={filters} />
-      ) : (
-        <StorefrontTheme boutique={boutique} products={products} categories={categories} filters={filters} />
-      )}
+      <StorefrontTheme boutique={boutique} products={products} categories={categories} filters={filters} reviewsEnabled={boutique.reviewsEnabled === true} favoriteProductIds={favoriteProductIds} onToggleFavorite={(id) => { void toggleFavorite(id); }} />
       {boutique && localStorage.getItem(`hanooti_chat_enabled_${boutique.slug}`) !== 'false' && localStorage.getItem('hanooti_boutique_chat_enabled') !== 'false' && (
-        <ChatBox boutiqueId={boutique.id} apiBaseUrl="/api" />
+        <ChatBox boutiqueId={boutique.id} apiBaseUrl="/api" primaryColor={boutique.primaryColor} />
       )}
     </>
   );
@@ -214,12 +289,15 @@ function mapProduct(item: ProductResponse): StoreProduct {
     categoryIds: item.categoryIds ?? [],
     brandName: item.brandName ?? null,
     filterValues: item.filterValues ?? [],
+    variants: item.variants ?? [],
     stockQuantity: item.stockQuantity,
     badge: item.badge ?? null,
     rating: item.rating,
     reviewsCount: item.reviewsCount,
-    createdAt: item.createdAt ?? null,
-  };
+    favoritesCount: item.favoritesCount,
+     createdAt: item.createdAt ?? null,
+     viewsCount: item.viewsCount ?? 0,
+   };
 }
 
 function collectionItems<T>(data: CollectionResponse<T>): T[] {

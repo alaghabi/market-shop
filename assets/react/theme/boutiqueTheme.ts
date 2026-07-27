@@ -1,6 +1,6 @@
 import type { IconProp } from '@fortawesome/fontawesome-svg-core';
 import { appIcons } from '../icons/fontAwesome';
-import { hanootiGlassTheme } from './themes/hanooti-glass';
+import { hanootiMarketplaceTheme } from './themes/hanooti-marketplace';
 
 export type BoutiqueTheme = {
   boutiqueId: string;
@@ -16,7 +16,7 @@ export type BoutiqueTheme = {
 export const defaultBoutiqueTheme: BoutiqueTheme = {
   boutiqueId: 'luxe-paris',
   name: 'Luxe Paris',
-  colorPalette: hanootiGlassTheme.colorPalette,
+  colorPalette: hanootiMarketplaceTheme.colorPalette,
   iconSet: {
     dashboard: appIcons.dashboard,
     products: appIcons.products,
@@ -53,7 +53,8 @@ export function applyBoutiqueTheme(theme: BoutiqueTheme) {
   const colors = theme.colorPalette;
 
   root.style.setProperty('--ds-primary', colors.primary ?? '#3525cd');
-  root.style.setProperty('--ds-primary-container', colors.primaryContainer ?? '#4f46e5');
+  root.style.setProperty('--ds-on-primary', colors.onPrimary ?? '#ffffff');
+  root.style.setProperty('--ds-primary-container', colors.primaryContainer ?? colors.primary ?? '#4f46e5');
   root.style.setProperty('--ds-secondary', colors.secondary ?? '#505f76');
   root.style.setProperty('--ds-surface', colors.background ?? '#fcf8ff');
   root.style.setProperty('--ds-surface-container-lowest', colors.surface ?? '#ffffff');
@@ -64,7 +65,8 @@ export function applyBoutiqueTheme(theme: BoutiqueTheme) {
   root.style.setProperty('--ds-outline-variant', colors.outline ?? '#c7c4d8');
 
   root.style.setProperty('--primary', colors.primary ?? '#3525cd');
-  root.style.setProperty('--primary-container', colors.primaryContainer ?? '#4f46e5');
+  root.style.setProperty('--on-primary', colors.onPrimary ?? '#ffffff');
+  root.style.setProperty('--primary-container', colors.primaryContainer ?? colors.primary ?? '#4f46e5');
   root.style.setProperty('--secondary', colors.secondary ?? '#505f76');
   root.style.setProperty('--surface', colors.background ?? '#fcf8ff');
   root.style.setProperty('--surface-container-lowest', colors.surface ?? '#ffffff');
@@ -86,7 +88,7 @@ export function applyStorefrontCssVars(colors: Record<string, string>) {
   root.style.setProperty('--sf-surface-accent', colors.surfaceContainerHigh ?? '#e7e0d6');
   root.style.setProperty('--sf-text', colors.text ?? '#171717');
   root.style.setProperty('--sf-text-muted', colors.textMuted ?? '#6b6560');
-  root.style.setProperty('--sf-accent', colors.primary ?? '#111111');
-  root.style.setProperty('--sf-accent-alt', colors.accent ?? colors.primaryContainer ?? '#a44100');
+  root.style.setProperty('--sf-accent', colors.accent ?? colors.primary ?? '#111111');
+  root.style.setProperty('--sf-accent-alt', colors.primary ?? colors.primaryContainer ?? '#a44100');
   root.style.setProperty('--sf-outline', colors.outline ?? '#d8d0c4');
 }

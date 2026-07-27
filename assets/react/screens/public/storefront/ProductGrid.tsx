@@ -4,11 +4,9 @@ import { ProductCard, type StoreProduct } from './ProductCard';
 export function ProductGrid({
   products,
   categories,
-  onAddToCart,
 }: {
   products: StoreProduct[];
   categories: string[];
-  onAddToCart: (p: StoreProduct) => void;
 }) {
   const [activeCategory, setActiveCategory] = useState<string>('Toutes');
   const filtered = activeCategory === 'Toutes' ? products : products.filter((p) => p.categoryName === activeCategory);
@@ -37,7 +35,7 @@ export function ProductGrid({
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-8">
         {filtered.map((p) => (
-          <ProductCard key={p.id} product={p} onAddToCart={onAddToCart} />
+          <ProductCard key={p.id} product={p} />
         ))}
       </div>
 

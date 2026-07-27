@@ -1,0 +1,3 @@
+16. [POST] http://demo-beauty-lab.localhost:8082/api/products/019f8440-3265-7f55-8a9c-6e446bf315df/view?boutiqueSlug=demo-beauty-lab => [200] OK
+
+Note: 11 static requests not shown, run with "static" option to see them.

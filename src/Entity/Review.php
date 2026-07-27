@@ -49,6 +49,9 @@ class Review extends AbstractEntity
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $ipHash = null;
 
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $browserHash = null;
+
     #[ORM\Column(length: 16, enumType: ReviewStatus::class)]
     private ReviewStatus $status = ReviewStatus::Pending;
 
@@ -203,6 +206,17 @@ class Review extends AbstractEntity
     public function setIpHash(?string $ipHash): void
     {
         $this->ipHash = $ipHash;
+        $this->updatedAt = new \DateTimeImmutable();
+    }
+
+    public function getBrowserHash(): ?string
+    {
+        return $this->browserHash;
+    }
+
+    public function setBrowserHash(?string $browserHash): void
+    {
+        $this->browserHash = $browserHash;
         $this->updatedAt = new \DateTimeImmutable();
     }
 

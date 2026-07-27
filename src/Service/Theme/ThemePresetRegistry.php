@@ -123,6 +123,6 @@ final class ThemePresetRegistry
 
     public function defaultCode(): string
     {
-        return 'hanooti-glass';
+        return 'hanooti-marketplace';
     }
 }

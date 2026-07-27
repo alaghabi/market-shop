@@ -264,7 +264,7 @@ function AppRoutes() {
       <Route path="/register" element={<Navigate to="/auth/register" replace />} />
       <Route path="/auth/login" element={<LoginPage onSignIn={signIn} onSignUp={signUp} initialMode="login" />} />
       <Route path="/auth/register" element={<LoginPage onSignIn={signIn} onSignUp={signUp} initialMode="register" />} />
-      <Route path="/avis" element={<ApplicationReviewsPage />} />
+      {!subdomainSlug && <Route path="/avis" element={<ApplicationReviewsPage />} />}
       <Route path="/suggestions" element={<SuggestionsPage />} />
       <Route path="/admin/suggestions" element={renderAdminRoute({ slug: 'suggestions', title: 'Boîte à suggestions', path: '/admin/suggestions', section: 'Admin', description: 'Gestion des suggestions', icon: 'dashboard', access: 'admin' })} />
       <Route path="/boutiques/:boutiqueSlug/cart" element={<CartRoutePage />} />

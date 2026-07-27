@@ -9,7 +9,7 @@ export function StoreFooter({ name, email, address }: { name: string; email?: st
             <div className="grid h-9 w-9 place-items-center rounded-lg bg-[color:var(--ds-primary)] font-black text-white">N</div>
             <span className="text-lg font-black">{name}</span>
           </div>
-          <p className="mt-3 text-sm text-white/70">Sélection premium d'objets qui durent, livrés partout en France.</p>
+           <p className="mt-3 text-sm text-white/70">Retrouvez toute la sélection de {name} et commandez en ligne.</p>
           <div className="mt-4 flex gap-3">
             <a href="#" className="opacity-80 hover:opacity-100" aria-label="Instagram"><ExternalLink className="h-4 w-4" /></a>
             <a href="#" className="opacity-80 hover:opacity-100" aria-label="Facebook"><ExternalLink className="h-4 w-4" /></a>
@@ -34,7 +34,7 @@ export function StoreFooter({ name, email, address }: { name: string; email?: st
         </div>
         <div>
           <h4 className="mb-3 text-sm font-semibold">Newsletter</h4>
-          <p className="mb-3 text-sm text-white/70">-10% sur votre première commande.</p>
+           <p className="mb-3 text-sm text-white/70">Recevez nos nouveautés et offres.</p>
           <form className="flex gap-2" onSubmit={(e) => e.preventDefault()}>
             <input
               type="email"

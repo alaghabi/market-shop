@@ -38,6 +38,16 @@ final class ProductFavoriteRepository extends ServiceEntityRepository
         return $this->findOneBy(['sessionId' => $sessionId, 'product' => $product, 'boutique' => $product->getBoutique()]);
     }
 
+    public function countByProduct(Product $product): int
+    {
+        return (int) $this->createQueryBuilder('favorite')
+            ->select('COUNT(favorite.id)')
+            ->andWhere('favorite.product = :product')
+            ->setParameter('product', $product)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     public function deleteBySession(string $sessionId): void
     {
         $this->createQueryBuilder('f')

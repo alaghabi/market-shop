@@ -1,4 +1,3 @@
-import { ShoppingCart } from 'lucide-react';
 import { boutiqueLink } from '../boutiqueRouting';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
 
@@ -18,9 +17,20 @@ export type StoreProduct = {
   brandName?: string | null;
   filterValues?: Array<{ filterId: string; filterName: string; filterSlug: string; value: string }>;
   stockQuantity?: number;
+  variants?: Array<{
+    id: string;
+    isActive: boolean;
+    quantity: number;
+    attributes: Array<{ name: string; value: string }>;
+  }>;
+  variantId?: string;
+  variantSku?: string | null;
+  variantAttributes?: Array<{ name: string; value: string }>;
   badge?: string | null;
   rating?: number;
   reviewsCount?: number;
+  favoritesCount?: number;
+  viewsCount?: number;
   createdAt?: string | null;
 };
 
@@ -34,10 +44,8 @@ export function getProductImageUrl(product: StoreProduct): string {
 
 export function ProductCard({
   product,
-  onAddToCart,
 }: {
   product: StoreProduct;
-  onAddToCart: (p: StoreProduct) => void;
 }) {
   const imgUrl = getProductImageUrl(product);
   const price = (product.priceCents / 100).toFixed(2);
@@ -68,15 +76,13 @@ export function ProductCard({
             </span>
           )}
         </a>
-        <button
-          type="button"
-          aria-label={`Ajouter ${product.name} au panier`}
-          onClick={(e) => { e.preventDefault(); onAddToCart(product); }}
-          className="absolute bottom-3 left-3 right-3 rounded-lg bg-[color:var(--ds-on-surface)] px-3 py-2 text-sm font-medium text-[color:var(--ds-surface)] opacity-100 transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--ds-primary)] flex items-center justify-center gap-2"
+        <a
+          href={boutiqueLink(`/products/${product.slug}`)}
+          aria-label={`Voir le produit ${product.name}`}
+           className="sf-neutral-action absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium opacity-100 transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--ds-primary)]"
         >
-          <ShoppingCart className="h-4 w-4" />
-          Ajouter au panier
-        </button>
+          Voir le produit
+        </a>
       </div>
       <div className="mt-3 space-y-1">
         <div className="text-xs text-[color:var(--ds-on-surface-variant)]">{product.categoryName || 'Catégorie'}</div>
@@ -89,9 +95,12 @@ export function ProductCard({
         <div className="flex items-center gap-2">
           <span className="text-sm font-bold text-[color:var(--ds-on-surface)]">{price} {product.currency}</span>
           {oldPrice && <span className="text-xs text-[color:var(--ds-on-surface-variant)] line-through">{oldPrice} {product.currency}</span>}
-          {product.rating && (
-            <span className="ml-auto text-xs text-[color:var(--ds-on-surface-variant)]">★ {product.rating}</span>
-          )}
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs text-[color:var(--ds-on-surface-variant)]">
+          <span>{product.viewsCount ?? 0} vues</span>
+          <span>★ {product.reviewsCount ?? 0} avis</span>
+          {product.rating != null && <span>Note {product.rating.toFixed(1)}/5</span>}
+          <span>♡ {product.favoritesCount ?? 0} favoris</span>
         </div>
       </div>
     </div>

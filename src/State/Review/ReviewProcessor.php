@@ -15,6 +15,7 @@ use App\Repository\OrderRepository;
 use App\Repository\ProductRepository;
 use App\Repository\ReviewRepository;
 use App\Service\Module\ModuleAccessService;
+use App\Service\Security\PublicApiRateLimiter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -34,6 +35,7 @@ final readonly class ReviewProcessor implements ProcessorInterface
         private Security $security,
         private RequestStack $requestStack,
         private ModuleAccessService $moduleAccess,
+        private PublicApiRateLimiter $rateLimiter,
     ) {
     }
 
@@ -79,14 +81,17 @@ final readonly class ReviewProcessor implements ProcessorInterface
             $boutique = $this->boutiques->findBySlugOrId($data->boutiqueId);
         }
 
-        if ($boutique && !$this->moduleAccess->isModuleEnabled('reviews', $boutique)) {
-            throw new AccessDeniedHttpException('Les avis ne sont pas activés pour cette boutique.');
-        }
-
         $product = null;
         if ($data->productId || isset($uriVariables['productId'])) {
             $productId = $uriVariables['productId'] ?? $data->productId;
             $product = $this->products->findBySlugOrId($productId, $boutique);
+            if ($product && !$boutique) {
+                $boutique = $product->getBoutique();
+            }
+        }
+
+        if ($boutique && !$this->moduleAccess->isModuleEnabled('reviews', $boutique)) {
+            throw new AccessDeniedHttpException('Les avis ne sont pas activés pour cette boutique.');
         }
 
         $user = $this->security->getUser();
@@ -98,15 +103,29 @@ final readonly class ReviewProcessor implements ProcessorInterface
         }
 
         $ipHash = $this->ipHash();
-        if (null !== $ipHash) {
-            if ($this->reviews->countRecentByIpHash($ipHash) >= 3) {
-                throw new BadRequestHttpException('Too many reviews from this IP. Please try later.');
+        $browserHash = $this->browserHash();
+        if ($user) {
+            if ($product && $this->reviews->existsForUserAndProduct($user, $product)) {
+                throw new BadRequestHttpException('Vous avez déjà publié un avis pour ce produit.');
             }
+            if (!$product && $boutique && $this->reviews->existsForUserAndBoutique($user, $boutique)) {
+                throw new BadRequestHttpException('Vous avez déjà publié un avis pour cette boutique.');
+            }
+        }
+        if (!$user && null !== $ipHash) {
             if ($product && $this->reviews->existsForIpAndProduct($ipHash, $product)) {
                 throw new BadRequestHttpException('A review for this product was already submitted from this IP.');
             }
             if (!$product && $boutique && $this->reviews->existsForIpAndBoutique($ipHash, $boutique)) {
                 throw new BadRequestHttpException('A review for this shop was already submitted from this IP.');
+            }
+        }
+        if (null !== $browserHash) {
+            if ($product && $this->reviews->existsForBrowserAndProduct($browserHash, $product)) {
+                throw new BadRequestHttpException('Un avis existe déjà depuis ce navigateur pour ce produit.');
+            }
+            if (!$product && $boutique && $this->reviews->existsForBrowserAndBoutique($browserHash, $boutique)) {
+                throw new BadRequestHttpException('Un avis existe déjà depuis ce navigateur pour cette boutique.');
             }
         }
         if (!$user && $data->authorEmail) {
@@ -117,6 +136,8 @@ final readonly class ReviewProcessor implements ProcessorInterface
                 throw new BadRequestHttpException('A review was already submitted recently with this email for this shop.');
             }
         }
+
+        $this->rateLimiter->consumeReview();
 
         $review = new Review(
             boutique: $boutique,
@@ -131,6 +152,7 @@ final readonly class ReviewProcessor implements ProcessorInterface
         $review->setAuthorPhone($data->authorPhone);
         $review->setImages($data->images);
         $review->setIpHash($ipHash);
+        $review->setBrowserHash($browserHash);
         $review->setVerifiedPurchase($this->isVerifiedPurchase($user, $boutique, $product));
 
         if ($data->authorEmail) {
@@ -184,5 +206,25 @@ final readonly class ReviewProcessor implements ProcessorInterface
         $ip = $this->requestStack->getCurrentRequest()?->getClientIp();
 
         return $ip ? hash('sha256', $ip) : null;
+    }
+
+    private function browserHash(): ?string
+    {
+        if ($this->security->getUser() instanceof User) {
+            return null;
+        }
+
+        $request = $this->requestStack->getCurrentRequest();
+        if (null === $request) {
+            return null;
+        }
+
+        $browserId = $request->cookies->get('hanooti_review_browser_id');
+        if (!is_string($browserId) || '' === trim($browserId)) {
+            $browserId = bin2hex(random_bytes(16));
+            $request->attributes->set('hanooti_review_browser_id', $browserId);
+        }
+
+        return hash('sha256', $browserId);
     }
 }
