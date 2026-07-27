@@ -1,5 +1,5 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   ArrowRight,
   Mail,
@@ -16,7 +16,7 @@ import { authHeaders, boutiqueLink, boutiqueQuery } from '../boutiqueRouting';
 import { type StoreProduct } from './ProductCard';
 import type { StoreCategory, StoreFilter } from './catalogueTypes';
 import { AboutPage, ContactPage, ProductListing, ReviewsPage } from './hanooti-marketplace/pages';
-import { buildCategories, findCategoryBySlug, isPromotion, productMatchesCategory, resolvePage, resolvePathParam } from './hanooti-marketplace/utils';
+import { buildCategories, findCategoryBySlug, isPromotion, productMatchesCategory, resolvePage, resolvePathParam, withProductCounts } from './hanooti-marketplace/utils';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
 import { BoutiqueAccountLink } from '../BoutiqueCustomerAccount';
 import { formatStoreReviewDate, storeReviewInitial, useStorefrontReviews, type StoreReview } from './reviews';
@@ -24,6 +24,7 @@ import { getStorefrontThemePreset } from '../../../theme/themes';
 import { FavoriteButton } from './FavoriteButton';
 import { BoutiqueMetrics } from './BoutiqueMetrics';
 import { FavoritesPopover } from './FavoritesPopover';
+import { OrderTrackingModal } from './OrderTrackingModal';
 import { resolveSectionTitle, resolveStorefrontHero, resolveStorefrontNavigation, type StorefrontContent } from './content';
 
 /** Brand accent used for CTAs/badges — falls back to the editorial black when a boutique has no custom color. */
@@ -89,10 +90,72 @@ export type StoreBoutique = StorefrontContent & {
   analyticsEnabled?: boolean;
   viewsEnabled?: boolean;
   customerAccountsEnabled?: boolean;
+  chatbotEnabled?: boolean;
   customersWithAccount?: number;
   customersWithoutAccount?: number;
   publicOrdersCount?: number;
+  productsCount?: number;
 };
+
+export type StoreAnnouncement = {
+  id: string;
+  content: string;
+  priority?: number;
+  active?: boolean;
+  visible?: boolean;
+  displayType?: string;
+  title?: string | null;
+  subtitle?: string | null;
+  backgroundColor?: string | null;
+  textColor?: string | null;
+  borderColor?: string | null;
+  linkUrl?: string | null;
+  displayMode?: string;
+  position?: string;
+  displayPages?: string[];
+  categoryIds?: string[];
+  productIds?: string[];
+};
+
+type StoreCmsPage = {
+  title: string;
+  description?: string | null;
+  content?: string | null;
+  publishedAt?: string | null;
+};
+
+function sanitizeCmsHtml(value: string): string {
+  if (typeof document === 'undefined') return value;
+
+  const template = document.createElement('template');
+  template.innerHTML = value;
+  template.content.querySelectorAll('script, iframe, object, embed, style').forEach((node) => node.remove());
+  template.content.querySelectorAll<HTMLElement>('*').forEach((element) => {
+    [...element.attributes].forEach((attribute) => {
+      if (attribute.name.toLowerCase().startsWith('on')) {
+        element.removeAttribute(attribute.name);
+      }
+      if (['href', 'src', 'action'].includes(attribute.name.toLowerCase()) && /^(javascript|data):/i.test(attribute.value.trim())) {
+        element.removeAttribute(attribute.name);
+      }
+    });
+  });
+
+  return template.innerHTML;
+}
+
+function CmsPageView({ page, loading }: { page: StoreCmsPage | null; loading: boolean }) {
+  if (loading) return <div className="mx-auto max-w-4xl px-4 py-20 text-center text-black/60">Chargement de la page...</div>;
+  if (!page) return <div className="mx-auto max-w-4xl px-4 py-20 text-center text-black/60">Page introuvable.</div>;
+
+  return (
+    <article className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
+      <h1 className="mb-6 text-4xl font-semibold tracking-tight">{page.title}</h1>
+      {page.description && <p className="mb-8 text-lg text-black/60">{page.description}</p>}
+      <div className="prose max-w-none text-black/75" dangerouslySetInnerHTML={{ __html: sanitizeCmsHtml(page.content ?? '') }} />
+    </article>
+  );
+}
 
 type CartItem = { product: StoreProduct; qty: number; itemId?: string };
 
@@ -113,11 +176,55 @@ type CartResponse = {
 function cartItemKey(item: CartItem): string {
   return item.itemId ?? `${item.product.id}:${item.product.variantId ?? ''}`;
 }
+
+function AutoSlider({ itemCount, children, className = '' }: { itemCount: number; children: ReactNode; className?: string }) {
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (itemCount < 2 || paused) return undefined;
+
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % itemCount);
+    }, 4500);
+
+    return () => window.clearInterval(timer);
+  }, [itemCount, paused]);
+
+  useEffect(() => {
+    const slider = sliderRef.current;
+    const item = slider?.children[activeIndex] as HTMLElement | undefined;
+    if (!slider || !item) return;
+
+    slider.scrollTo({
+      left: item.offsetLeft - slider.offsetLeft,
+      behavior: reduceMotion ? 'auto' : 'smooth',
+    });
+  }, [activeIndex, reduceMotion]);
+
+  return (
+    <div
+      ref={sliderRef}
+      className={`flex snap-x snap-mandatory gap-5 overflow-x-auto pb-3 scrollbar-none ${className}`}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={() => setPaused(false)}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function StorefrontTheme({
   boutique,
   products: initial,
   categories: loadedCategories = [],
   filters,
+  announcements = [],
+  promotedProductIds = [],
   reviewsEnabled = false,
   favoriteProductIds,
   onToggleFavorite,
@@ -127,6 +234,8 @@ export function StorefrontTheme({
   products: StoreProduct[];
   categories?: StoreCategory[];
   filters: StoreFilter[];
+  announcements?: StoreAnnouncement[];
+  promotedProductIds?: string[];
   reviewsEnabled?: boolean;
   favoriteProductIds: string[];
   onToggleFavorite: (productId: string) => void;
@@ -137,9 +246,17 @@ export function StorefrontTheme({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [coverImageFailed, setCoverImageFailed] = useState(false);
+  const [cmsPage, setCmsPage] = useState<StoreCmsPage | null>(null);
+  const [cmsPageLoading, setCmsPageLoading] = useState(false);
+  const [orderTrackingOpen, setOrderTrackingOpen] = useState(false);
 
   const heroColor = resolveHeroBackground(boutique);
   const heroTextColor = resolveHeroTextColor(boutique);
+
+  const displayProducts = useMemo(
+    () => initial.map((product) => ({ ...product, isPromoted: promotedProductIds.includes(product.id) })),
+    [initial, promotedProductIds],
+  );
 
   useEffect(() => {
     setCoverImageFailed(false);
@@ -147,46 +264,45 @@ export function StorefrontTheme({
 
   window.__boutiqueSlug__ = boutique.slug;
 
-  const categories = useMemo<StoreCategory[]>(() => loadedCategories.length > 0 ? loadedCategories : buildFallbackCategories(initial), [initial, loadedCategories]);
+  const categories = useMemo<StoreCategory[]>(() => loadedCategories.length > 0 ? withProductCounts(loadedCategories, displayProducts) : buildFallbackCategories(displayProducts), [displayProducts, loadedCategories]);
 
   const filteredProducts = useMemo(
     () =>
       searchQuery
-        ? initial.filter(
+        ? displayProducts.filter(
             (product) =>
               product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
               product.description?.toLowerCase().includes(searchQuery.toLowerCase())
           )
-        : initial,
-    [initial, searchQuery]
+        : displayProducts,
+    [displayProducts, searchQuery]
   );
 
-  const featuredProduct = filteredProducts[0] ?? initial[0] ?? null;
-  const spotlightProduct =
-    filteredProducts.find((product) => (product.comparePriceCents ?? 0) > product.priceCents) ??
-    filteredProducts[1] ??
-    featuredProduct;
+  const featuredProduct = filteredProducts[0] ?? displayProducts[0] ?? null;
   const newArrivals = filteredProducts.slice(0, 4);
+  const spotlightPromos = filteredProducts.filter(isPromotion).slice(0, 4);
+  const spotlightProducts = spotlightPromos.length > 0 ? spotlightPromos : filteredProducts.slice(0, 4);
   const bestSellers = [...filteredProducts]
     .sort((left, right) => (right.rating ?? 0) - (left.rating ?? 0))
     .slice(0, 2);
   const heroCategories = categories.slice(0, 2);
-  const collectionCategories = categories.length > 0 ? categories : buildFallbackCategories(initial);
+  const collectionCategories = categories.length > 0 ? categories : buildFallbackCategories(displayProducts);
   const routePage = resolvePage();
+  const cmsSlug = resolvePathParam('pages');
   const categorySlug = resolvePathParam('categories');
   const currentCategory = findCategoryBySlug(categories, categorySlug);
   const routeProducts = routePage === 'category' && currentCategory
-    ? initial.filter((product) => productMatchesCategory(product, currentCategory))
+    ? displayProducts.filter((product) => productMatchesCategory(product, currentCategory))
     : routePage === 'promotions'
-      ? initial.filter(isPromotion)
-      : initial;
+      ? displayProducts.filter(isPromotion)
+      : displayProducts;
 
   async function refreshCart(): Promise<void> {
     const response = await fetch(`/api/cart${boutiqueQuery(boutique.slug)}`, { credentials: 'same-origin', headers: authHeaders() });
     if (!response.ok) return;
     const payload = await response.json() as CartResponse;
     setCart(payload.items.filter((item) => item.productId !== null).map((item) => {
-      const baseProduct = initial.find((product) => product.id === item.productId);
+      const baseProduct = displayProducts.find((product) => product.id === item.productId);
       return {
         itemId: item.id,
         qty: item.quantity,
@@ -209,7 +325,33 @@ export function StorefrontTheme({
 
   useEffect(() => {
     void refreshCart();
-  }, [boutique.slug, initial]);
+  }, [boutique.slug, displayProducts]);
+
+  useEffect(() => {
+    if (routePage !== 'cms' || !cmsSlug) {
+      setCmsPage(null);
+      setCmsPageLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setCmsPageLoading(true);
+    fetch(`/api/pages/${encodeURIComponent(cmsSlug)}${boutiqueQuery(boutique.slug)}`, { headers: authHeaders() })
+      .then((response) => response.ok ? response.json() as Promise<StoreCmsPage> : null)
+      .then((page) => {
+        if (!cancelled) setCmsPage(page);
+      })
+      .catch(() => {
+        if (!cancelled) setCmsPage(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCmsPageLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [boutique.slug, cmsSlug, routePage]);
 
   async function handleSetQty(id: string, qty: number): Promise<void> {
     const item = cart.find((current) => cartItemKey(current) === id);
@@ -233,9 +375,9 @@ export function StorefrontTheme({
     if (response.ok) await refreshCart();
   }
 
-  const { reviews, isLoading: reviewsLoading } = useStorefrontReviews(reviewsEnabled);
+  const { reviews, isLoading: reviewsLoading } = useStorefrontReviews(reviewsEnabled, boutique.slug);
   const featuredReviews = reviews.slice(0, 3);
-  const productNames = new Map(initial.map((product) => [product.id, product.name]));
+  const productNames = new Map(displayProducts.map((product) => [product.id, product.name]));
 
   const resolvedNavItems = resolveStorefrontNavigation(boutique, reviewsEnabled);
   const headerConfig = boutique.headerConfig ?? {};
@@ -255,10 +397,10 @@ export function StorefrontTheme({
         fontSize: 'var(--ds-font-size, 16px)',
       } as React.CSSProperties}
     >
-      <TopRibbon boutique={boutique} />
+      <TopRibbon boutique={boutique} announcements={announcements} />
 
       <header className="sticky top-0 z-30 border-b border-black/10 bg-[color:var(--sf-bg,#f6f2eb)]/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex h-20 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
           <button
             className="sf-menu-toggle rounded-full p-2 text-[#171717] lg:hidden"
             onClick={() => setMobileMenu(true)}
@@ -269,13 +411,13 @@ export function StorefrontTheme({
 
           <a href={boutiqueLink('/')} className="flex items-center gap-3">
             <ImageWithFallback src={boutique.logoUrl} alt={boutique.logoUrl ? boutique.name : 'Hanooti'} className="h-10 w-10 rounded-full object-cover" />
-            <div>
+            <div className="hidden lg:block">
                 <div className="text-xs uppercase tracking-[0.28em] text-black/50">{boutique.slogan || 'Boutique'}</div>
               <div className="text-lg font-semibold tracking-tight">{boutique.name}</div>
             </div>
           </a>
 
-          <nav className="sf-desktop-nav hidden items-center gap-8 lg:flex">
+          <nav className="sf-desktop-nav hidden items-center gap-8 lg:ml-auto lg:flex">
              {resolvedNavItems.map((item) => (
               <a key={item.label} href={item.href} className="text-sm font-medium text-black/70 transition hover:text-black">
                 {item.label}
@@ -283,7 +425,7 @@ export function StorefrontTheme({
             ))}
           </nav>
 
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 lg:ml-auto">
              {headerConfig.show_search !== false && <button
               onClick={() => setSearchOpen(true)}
               className="rounded-full border border-black/10 p-2 text-black transition hover:bg-white"
@@ -338,7 +480,7 @@ export function StorefrontTheme({
 
       <AnimatePresence>
         {searchOpen && (
-          <SearchOverlay query={searchQuery} onQuery={setSearchQuery} onClose={() => setSearchOpen(false)} products={initial} />
+          <SearchOverlay query={searchQuery} onQuery={setSearchQuery} onClose={() => setSearchOpen(false)} products={displayProducts} />
         )}
       </AnimatePresence>
 
@@ -365,7 +507,15 @@ export function StorefrontTheme({
           ) : routePage === 'contact' ? (
             <ContactPage boutique={boutique} />
           ) : routePage === 'reviews' ? (
-            <ReviewsPage products={initial} reviewsEnabled={reviewsEnabled} boutique={boutique} />
+            <ReviewsPage
+               products={displayProducts}
+              reviewsEnabled={reviewsEnabled}
+              boutique={boutique}
+              sharedReviews={reviews}
+               sharedReviewsLoading={reviewsLoading}
+             />
+          ) : routePage === 'cms' ? (
+            <CmsPageView page={cmsPage} loading={cmsPageLoading} />
           ) : (
           <>
         <section className="px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pb-16 lg:pt-8">
@@ -408,7 +558,7 @@ export function StorefrontTheme({
                      whileHover={{ y: -2 }}
                      whileTap={{ scale: 0.97 }}
                      href={boutiqueLink('/catalogue')}
-                     className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition sm:w-auto"
                      style={{ backgroundColor: BRAND }}
                    >
                      Explorer la boutique
@@ -418,7 +568,7 @@ export function StorefrontTheme({
                      whileHover={{ y: -2 }}
                      whileTap={{ scale: 0.97 }}
                       href={activeBanner?.button_url ? (activeBanner.button_url.startsWith('/') ? boutiqueLink(activeBanner.button_url) : activeBanner.button_url) : boutiqueLink('/promotions')}
-                      className="inline-flex items-center gap-2 rounded-full border border-[color:var(--sf-accent,var(--ds-primary,#111111))] px-6 py-3 text-sm font-semibold text-[color:var(--sf-accent,var(--ds-primary,#111111))] transition hover:bg-[color:var(--sf-accent,var(--ds-primary,#111111))] hover:text-white"
+                       className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[color:var(--sf-accent,var(--ds-primary,#111111))] px-6 py-3 text-sm font-semibold text-[color:var(--sf-accent,var(--ds-primary,#111111))] transition hover:bg-[color:var(--sf-accent,var(--ds-primary,#111111))] hover:text-white sm:w-auto"
                    >
                       {activeBanner?.button_text ?? 'Voir les promotions'}
                    </motion.a>
@@ -447,13 +597,13 @@ export function StorefrontTheme({
               <div className="rounded-[1.6rem] border border-black/10 bg-white px-6 py-6">
                  <div className="text-lg font-semibold">Restez informé</div>
                  <p className="mt-2 text-sm leading-6 text-black/60">Recevez les nouveautés et actualités de la boutique.</p>
-                <form className="mt-4 flex gap-2" onSubmit={(event) => event.preventDefault()}>
+                 <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => event.preventDefault()}>
                   <input
                     type="email"
                     placeholder="Votre email"
-                    className="min-w-0 flex-1 rounded-full border border-black/10 bg-[#f8f5ef] px-4 py-3 text-sm outline-none"
+                     className="min-w-0 w-full flex-1 rounded-full border border-black/10 bg-[#f8f5ef] px-4 py-3 text-sm outline-none"
                   />
-                  <button type="submit" className="rounded-full px-5 py-3 text-sm font-semibold text-white" style={{ backgroundColor: BRAND }}>
+                   <button type="submit" className="w-full rounded-full px-5 py-3 text-sm font-semibold text-white sm:w-auto" style={{ backgroundColor: BRAND }}>
                     Rejoindre
                   </button>
                 </form>
@@ -462,10 +612,11 @@ export function StorefrontTheme({
           </motion.div>
         </section>
 
-        <FeatureTicker />
+        <FeatureTicker announcements={announcements} />
 
         {boutique.analyticsEnabled && (
           <BoutiqueMetrics
+            productsCount={boutique.productsCount}
             customersWithAccount={boutique.customersWithAccount}
             customersWithoutAccount={boutique.customersWithoutAccount}
             ordersCount={boutique.publicOrdersCount}
@@ -474,34 +625,24 @@ export function StorefrontTheme({
         )}
 
         <section id="story" className="px-4 py-14 sm:px-6 lg:px-8">
-          <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[260px_minmax(0,1fr)]">
-            <div>
-              <div className="text-xs uppercase tracking-[0.25em] text-black/45">Explorer</div>
-           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">{sectionTitle('categories', 'Nos univers')}</h2>
-            </div>
-            <motion.div
-              className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5"
-              variants={staggerContainer}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true, margin: '-80px' }}
-            >
+          <div className="mx-auto max-w-7xl">
+            <SectionHeading eyebrow="Explorer" title={sectionTitle('categories', 'Nos univers')} href={boutiqueLink('/catalogue')} />
+            <AutoSlider itemCount={collectionCategories.length} className="mt-8">
               {collectionCategories.map((category) => (
                 <motion.a
                   key={category.name}
-                  variants={fadeUp}
                   whileHover={{ y: -4 }}
                   href={boutiqueLink(`/categories/${category.slug}`)}
-                  className="group overflow-hidden rounded-[1.8rem] border border-black/10 bg-white"
+                  className="group w-[82%] shrink-0 snap-start overflow-hidden rounded-[1.7rem] border border-black/10 bg-white sm:w-[calc((100%-1.25rem)/2)] xl:w-[calc((100%-3.75rem)/4)]"
                 >
-                  <div className="aspect-[0.9] overflow-hidden bg-[#e7e0d6]">
+                  <div className="aspect-[0.95] overflow-hidden bg-[#e7e0d6]">
                     {category.image ? (
                       <ImageWithFallback src={category.image} alt={category.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
                     ) : (
                       <div className="flex h-full items-center justify-center text-sm text-black/45">{category.name}</div>
                     )}
                   </div>
-                  <div className="flex items-center justify-between px-5 py-4">
+                  <div className="flex items-center justify-between px-5 py-5">
                     <div>
                       <div className="text-sm font-semibold">{category.name}</div>
                       <div className="mt-1 text-xs text-black/50">{category.count} items</div>
@@ -510,77 +651,36 @@ export function StorefrontTheme({
                   </div>
                 </motion.a>
               ))}
-            </motion.div>
+            </AutoSlider>
           </div>
         </section>
 
         <section id="catalogue" className="px-4 py-14 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
              <SectionHeading eyebrow="Catalogue" title={sectionTitle('products', 'Nouveautes')} href={boutiqueLink('/catalogue')} />
-            <motion.div
-              className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-4"
-              variants={staggerContainer}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true, margin: '-80px' }}
-            >
-              {newArrivals.map((product) => (
-                <motion.div key={product.id} variants={fadeUp}>
+             <AutoSlider itemCount={newArrivals.length} className="mt-8">
+               {newArrivals.map((product) => (
+                 <div key={product.id} className="w-[82%] shrink-0 snap-start sm:w-[calc((100%-1.5rem)/2)] xl:w-[calc((100%-4.5rem)/4)]">
                    <ProductEditorialCard product={product} reviewsEnabled={reviewsEnabled} viewsEnabled={boutique.viewsEnabled === true} wishlistEnabled={boutique.wishlistEnabled === true} activeFavorite={favoriteProductIds.includes(product.id)} onToggleFavorite={onToggleFavorite} />
-                </motion.div>
-              ))}
-            </motion.div>
+                 </div>
+               ))}
+             </AutoSlider>
           </div>
         </section>
 
         <section id="drops" className="px-4 pb-14 sm:px-6 lg:px-8" />
 
-        {spotlightProduct && (
-          <section className="px-4 py-8 sm:px-6 lg:px-8">
-            <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-              <div className="rounded-[2rem] bg-[#111111] px-8 py-8 text-white sm:px-10 sm:py-10" style={{ backgroundColor: heroColor }}>
-                 <div className="text-xs uppercase tracking-[0.24em] text-white/55">Offres du moment</div>
-                 <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Découvrez notre sélection</h3>
-                <p className="mt-3 max-w-xl text-sm leading-7 text-white/70">
-                   Retrouvez les produits et offres actuellement disponibles dans cette boutique.
-                </p>
-                <motion.a
-                  whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.97 }}
-                  href={boutiqueLink('/promotions')}
-                   className="mt-6 inline-flex items-center gap-2 rounded-full border border-[color:var(--sf-accent,var(--ds-primary,#111111))] px-6 py-3 text-sm font-semibold text-[color:var(--sf-accent,var(--ds-primary,#111111))] transition hover:bg-[color:var(--sf-accent,var(--ds-primary,#111111))] hover:text-white"
-                >
-                  J&apos;en profite
-                  <ArrowRight className="h-4 w-4" />
-                </motion.a>
-              </div>
-
-              <div className="overflow-hidden rounded-[2rem] border border-[color:var(--sf-outline,var(--ds-outline-variant))] bg-[color:var(--sf-surface,var(--ds-surface-container-lowest))]">
-                <div className="aspect-[1.05] overflow-hidden bg-[color:var(--sf-surface-muted,var(--ds-surface-container))]">
-                  {getProductImage(spotlightProduct) ? (
-                     <ImageWithFallback src={getProductImage(spotlightProduct)} alt={spotlightProduct.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-black/45">Produit</div>
-                  )}
-                </div>
-                <div className="px-6 py-5">
-                   <div className="text-xs uppercase tracking-[0.22em] text-black/45">Coup de coeur</div>
-                   <div className="mt-2 text-xl font-semibold">{spotlightProduct.name}</div>
-                   <div className="mt-3 flex items-center justify-between gap-3 text-sm text-black/55">
-                     <div className="flex items-center gap-3">
-                        {boutique.viewsEnabled === true && <span>{spotlightProduct.viewsCount ?? 0} vues</span>}
-                       <span className="font-semibold text-black">{formatPrice(spotlightProduct)}</span>
-                       {reviewsEnabled && <span>{spotlightProduct.reviewsCount ?? 0} avis</span>}
-                        {reviewsEnabled && spotlightProduct.rating != null && <span>Note {spotlightProduct.rating.toFixed(1)}/5</span>}
-                        {boutique.wishlistEnabled === true && <span>{spotlightProduct.favoritesCount ?? 0} favoris</span>}
-                     </div>
-                     {boutique.wishlistEnabled && <FavoriteButton productId={spotlightProduct.id} active={favoriteProductIds.includes(spotlightProduct.id)} onToggle={onToggleFavorite} />}
-                   </div>
-                   <a href={boutiqueLink(`/products/${spotlightProduct.slug}`)} className="sf-neutral-action mt-4 inline-flex rounded-full px-5 py-3 text-sm font-semibold">
-                    Voir le produit
-                  </a>
-                </div>
-              </div>
+        {spotlightProducts.length > 0 && (
+          <section id="spotlight" className="px-4 py-14 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-7xl">
+              <SectionHeading eyebrow="Offres du moment" title="Découvrez notre sélection" href={boutiqueLink('/promotions')} />
+              <AutoSlider itemCount={spotlightProducts.length} className="mt-8">
+                {spotlightProducts.map((product) => (
+                  <div key={product.id} className="w-[82%] shrink-0 snap-start sm:w-[calc((100%-1.5rem)/2)] xl:w-[calc((100%-4.5rem)/4)]">
+                    <ProductEditorialCard product={product} reviewsEnabled={reviewsEnabled} viewsEnabled={boutique.viewsEnabled === true} wishlistEnabled={boutique.wishlistEnabled === true} activeFavorite={favoriteProductIds.includes(product.id)} onToggleFavorite={onToggleFavorite} />
+                  </div>
+                ))}
+              </AutoSlider>
             </div>
           </section>
         )}
@@ -654,13 +754,26 @@ export function StorefrontTheme({
             { label: 'Promotions', href: boutiqueLink('/promotions') },
           ]} />
 
-          <FooterLinks title="Aide" links={[
-            { label: 'Contact', href: boutiqueLink('/contact') },
-            { label: 'CGV', href: boutiqueLink('') },
-            { label: 'Livraison & retours', href: boutiqueLink('/contact') },
-          ]} />
+           <FooterLinks title="Aide" links={[
+             { label: 'Contact', href: boutiqueLink('/contact') },
+             { label: 'CGV', href: boutiqueLink('') },
+             { label: 'Livraison & retours', href: boutiqueLink('/contact') },
+           ]} />
 
-           {showNewsletter && <div>
+           <div>
+             <div className="text-sm font-semibold">Votre commande</div>
+             <p className="mt-3 text-sm leading-6 text-white/55">Retrouvez le statut réel de votre commande avec sa référence.</p>
+               <a
+                 href="#order-tracking"
+                 onClick={(event) => { event.preventDefault(); setOrderTrackingOpen(true); }}
+                 className="mt-4 inline-flex w-full items-center justify-center rounded-full border px-5 py-3 text-sm font-semibold transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111111]"
+                 style={{ backgroundColor: BRAND, borderColor: BRAND, color: 'var(--ds-on-primary, #ffffff)' }}
+               >
+                Consulter votre commande
+              </a>
+           </div>
+
+            {showNewsletter && <div>
              <div className="text-sm font-semibold">Newsletter</div>
              <p className="mt-3 text-sm text-white/55">Recevez nos nouveautés et offres.</p>
             <form className="mt-4 flex gap-2" onSubmit={(event) => event.preventDefault()}>
@@ -679,26 +792,44 @@ export function StorefrontTheme({
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-5 text-xs text-white/45 sm:px-6 lg:px-8">
              <span>{copyrightText}</span>
             <span>{boutique.address || 'Tunisie'}</span>
-          </div>
-        </div>
+         </div>
+       </div>
       </footer>
+      {orderTrackingOpen && <OrderTrackingModal boutiqueSlug={boutique.slug} onClose={() => setOrderTrackingOpen(false)} />}
     </div>
   );
 }
 
-function TopRibbon({ boutique }: { boutique: StoreBoutique }) {
+function TopRibbon({ boutique, announcements }: { boutique: StoreBoutique; announcements: StoreAnnouncement[] }) {
+  const announcement = announcements
+    .filter((item) => item.active !== false && item.visible !== false)
+    .filter((item) => (item.categoryIds ?? []).length === 0 && (item.productIds ?? []).length === 0)
+    .filter((item) => {
+      const pages = item.displayPages ?? [];
+      return pages.length === 0 || pages.includes('all') || pages.includes('home');
+    })
+    .filter((item) => item.displayType === 'TOP_BAR' || ['HEADER_TOP', 'TOP_PAGE'].includes(item.position ?? ''))
+    .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0))[0];
+
+  if (!announcement) return null;
+
+  const label = announcement.title?.trim() || announcement.content.trim();
+  const link = announcement.linkUrl?.trim();
+
   return (
-    <div className="border-b border-black/8 bg-[#ece5d9] text-[#171717]">
+    <div className="border-b border-black/8 text-[#171717]" style={{ backgroundColor: announcement.backgroundColor ?? '#ece5d9', color: announcement.textColor ?? '#171717', borderColor: announcement.borderColor ?? undefined }}>
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-2 text-xs sm:px-6 lg:px-8">
-        <div className="font-medium">Livraison offerte des 60 DT · Retours 30 jours</div>
-        <div className="flex items-center gap-4 text-black/65">
+        <div className="font-medium">
+          {link ? <a href={link.startsWith('/') ? boutiqueLink(link) : link} className="hover:underline">{label}</a> : label}
+        </div>
+        <div className="flex items-center gap-4 opacity-70">
           {boutique.email && (
             <a href={`mailto:${boutique.email}`} className="inline-flex items-center gap-2 hover:text-black">
               <Mail className="h-3.5 w-3.5" />
               {boutique.email}
             </a>
           )}
-          <span className="hidden sm:inline">Support 7j/7</span>
+          {announcement.subtitle && <span className="hidden sm:inline">{announcement.subtitle}</span>}
         </div>
       </div>
     </div>
@@ -762,43 +893,90 @@ function FeaturedProductPanel({ product, reviewsEnabled, viewsEnabled, wishlistE
         </div>
         <div className="mt-3 text-xl font-semibold tracking-tight">{product.name}</div>
         <p className="mt-2 text-sm leading-6 text-black/58">{product.description || 'Piece phare de la collection, selectionnee pour incarner le template de reference.'}</p>
-        <div className="mt-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="mt-4 space-y-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
              {viewsEnabled && <span className="text-xs text-black/50">{product.viewsCount ?? 0} vues</span>}
             <div className="text-lg font-semibold">{formatPrice(product)}</div>
             {reviewsEnabled && <span className="text-xs text-black/50">{product.reviewsCount ?? 0} avis</span>}
             {reviewsEnabled && product.rating != null && <span className="text-xs text-black/50">Note {product.rating.toFixed(1)}/5</span>}
             {wishlistEnabled && <span className="text-xs text-black/50">{product.favoritesCount ?? 0} favoris</span>}
           </div>
-          {wishlistEnabled && <FavoriteButton productId={product.id} active={activeFavorite} onToggle={onToggleFavorite} />}
-          <a
-            href={boutiqueLink(`/products/${product.slug}`)}
-             className="sf-neutral-action rounded-full px-4 py-2 text-sm font-semibold"
-          >
-            Voir le produit
-          </a>
+          <div className="flex items-center gap-2">
+              <a
+                href={boutiqueLink(`/products/${product.slug}`)}
+                className="sf-primary-action inline-flex min-h-10 flex-1 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+                style={{ backgroundColor: 'var(--ds-primary)' }}
+            >
+              Voir le produit
+            </a>
+            {wishlistEnabled && <FavoriteButton productId={product.id} active={activeFavorite} onToggle={onToggleFavorite} />}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function FeatureTicker() {
-  const items = ['◆ Nouveautés', '◆ Paiement sécurisé', '◆ Retours', '◆ Support boutique', '◆ Sélection boutique', '◆ Commande en ligne'];
-  const repeatedItems = [...items, ...items, ...items];
+function FeatureTicker({ announcements }: { announcements: StoreAnnouncement[] }) {
+  const announcementItems = announcements
+    .filter((announcement) => announcement.displayType === 'HOME_SLIDER' || ['HOME_TOP', 'HOME_MIDDLE', 'HOME_BOTTOM'].includes(announcement.position ?? ''))
+    .map((announcement) => ({
+    id: announcement.id,
+    label: announcement.title?.trim() || announcement.content.trim(),
+    subtitle: announcement.subtitle?.trim(),
+    backgroundColor: announcement.backgroundColor ?? undefined,
+    textColor: announcement.textColor ?? undefined,
+    borderColor: announcement.borderColor ?? undefined,
+    linkUrl: announcement.linkUrl ?? undefined,
+    displayMode: announcement.displayMode ?? 'SLIDER',
+  })).filter((announcement) => announcement.label);
+  const groups = Array.from({ length: Math.ceil(announcementItems.length / 3) }, (_, index) => announcementItems.slice(index * 3, index * 3 + 3));
+  const shouldRotate = announcementItems.some((item) => item.displayMode !== 'FIXED') && groups.length > 1;
+  const [groupIndex, setGroupIndex] = useState(0);
+
+  useEffect(() => {
+    if (!shouldRotate) return undefined;
+    const interval = window.setInterval(() => setGroupIndex((current) => (current + 1) % groups.length), 6000);
+
+    return () => window.clearInterval(interval);
+  }, [groups.length, shouldRotate]);
+
+  if (groups.length === 0) return null;
+
+  const visibleItems = groups[groupIndex % groups.length];
 
   return (
-    <section className="overflow-hidden border-y border-black/10 bg-white py-4" aria-label="Avantages de la boutique">
+    <section className="border-y border-black/10 bg-white py-4" aria-label="Annonces de la boutique">
       <motion.div
-        className="flex w-max whitespace-nowrap text-sm text-black/55"
-        animate={{ x: ['0%', '-33.333333%'] }}
-        transition={{ duration: 24, ease: 'linear', repeat: Infinity }}
+        key={groupIndex}
+        className="mx-auto flex max-w-7xl flex-wrap justify-center gap-3 px-4 text-sm text-black/55"
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
       >
-        {repeatedItems.map((item, index) => (
-          <span key={`${item}-${index}`} className="mx-4 inline-flex items-center sm:mx-6">
-            {item}
-          </span>
-        ))}
+        {visibleItems.map((item) => {
+          const content = (
+            <span
+              className="inline-flex max-w-full items-center rounded-full border border-transparent px-4 py-2 text-center"
+              style={{
+                backgroundColor: item.backgroundColor,
+                color: item.textColor,
+                borderColor: item.borderColor,
+              }}
+            >
+              {item.label}
+              {item.subtitle && <span className="ml-2 opacity-70">{item.subtitle}</span>}
+            </span>
+          );
+
+          return item.linkUrl ? (
+            <a key={item.id} href={item.linkUrl} className="inline-flex max-w-full" target={item.linkUrl.startsWith('http') ? '_blank' : undefined} rel={item.linkUrl.startsWith('http') ? 'noreferrer' : undefined}>
+              {content}
+            </a>
+          ) : (
+            <span key={item.id} className="inline-flex max-w-full">{content}</span>
+          );
+        })}
       </motion.div>
     </section>
   );
@@ -859,10 +1037,11 @@ function ProductEditorialCard({
             {badge}
           </div>
         </a>
-        <a
-          href={boutiqueLink(`/products/${product.slug}`)}
-          aria-label={`Voir le produit ${product.name}`}
-           className="sf-neutral-action absolute bottom-4 right-4 rounded-full px-4 py-2 text-sm font-semibold opacity-100 transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          <a
+            href={boutiqueLink(`/products/${product.slug}`)}
+            aria-label={`Voir le produit ${product.name}`}
+            className="sf-primary-action absolute bottom-4 right-4 rounded-full px-4 py-2 text-sm font-semibold opacity-100 transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{ backgroundColor: 'var(--ds-primary)' }}
         >
           Voir le produit
         </a>
@@ -1012,21 +1191,21 @@ function SearchOverlay({
 }
 
 function getProductImage(product: StoreProduct): string {
-  const firstImage = product.images?.[0];
+  const firstImage = product.images?.find((image) => typeof image !== 'string' && image.isDefault) ?? product.images?.[0];
   if (!firstImage) {
     return '';
   }
 
-  return typeof firstImage === 'string' ? firstImage : firstImage.url || '';
+  return typeof firstImage === 'string' ? firstImage : firstImage.largeUrl ?? firstImage.url ?? '';
 }
 
 function resolveBadge(product: StoreProduct): string {
-  if (product.badge) {
-    return product.badge;
+  if (product.isPromoted) {
+    return 'Promo';
   }
 
-  if ((product.comparePriceCents ?? 0) > product.priceCents) {
-    return 'Promo';
+  if (product.badge) {
+    return product.badge;
   }
 
   if ((product.rating ?? 0) >= 4.7) {

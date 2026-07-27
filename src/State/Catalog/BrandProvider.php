@@ -5,12 +5,16 @@ namespace App\State\Catalog;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Catalog\BrandOutput;
 use App\Entity\Brand;
 use App\Repository\BoutiqueRepository;
 use App\Repository\BrandRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Backoffice\BackofficeScopeResolver;
 use App\State\Common\BoutiqueAwareProviderTrait;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 
 /** @implements ProviderInterface<BrandOutput> */
 final readonly class BrandProvider implements ProviderInterface
@@ -21,16 +25,21 @@ final readonly class BrandProvider implements ProviderInterface
         private BrandRepository $brands,
         private BoutiqueRepository $boutiques,
         private BoutiqueContext $context,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return list<BrandOutput>|BrandOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|BrandOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|BrandOutput|null
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $boutique = $this->resolveBoutiqueFromRequest($context, $uriVariables);
         if (!$boutique) {
             if (!$this->context->isSuperAdmin()) {
-                return $operation instanceof Get ? null : [];
+                return $operation instanceof Get
+                    ? null
+                    : new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
             }
 
             if ($operation instanceof Get) {
@@ -39,7 +48,18 @@ final readonly class BrandProvider implements ProviderInterface
                 return $brand instanceof Brand ? $this->toOutput($brand) : null;
             }
 
-            return array_map([$this, 'toOutput'], $this->brands->findBy([], ['name' => 'ASC']));
+            $result = $this->brands->findForBackoffice(
+                null,
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
+
+            return new BackofficePaginator(
+                array_map([$this, 'toOutput'], $result['items']),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+                $result['total'],
+            );
         }
 
         if ($operation instanceof Get) {
@@ -50,9 +70,17 @@ final readonly class BrandProvider implements ProviderInterface
                 : null;
         }
 
-        return array_map(
-            [$this, 'toOutput'],
-            $this->brands->findByBoutique($boutique),
+        $result = $this->brands->findForBackoffice(
+            $boutique,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
+
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
         );
     }
 

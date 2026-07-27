@@ -34,6 +34,7 @@ security:
         - { path: ^/api/auth/me, roles: PUBLIC_ACCESS }
         - { path: ^/api/auth/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/auth/register-shop, roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/password-reset, roles: PUBLIC_ACCESS }
         - { path: ^/api/boutique/auth, roles: PUBLIC_ACCESS }
         - { path: ^/api/account, roles: ROLE_CUSTOMER }
         - { path: ^/api/boutiques$, roles: PUBLIC_ACCESS }
@@ -70,6 +71,7 @@ security:
         - { path: ^/api/payment-methods, roles: ROLE_BOUTIQUE_ADMIN }
         - { path: ^/api/cms, roles: PUBLIC_ACCESS, methods: [GET] }
         - { path: ^/api/cms, roles: ROLE_BOUTIQUE_ADMIN }
+        - { path: ^/api/pages, roles: PUBLIC_ACCESS, methods: [GET] }
         - { path: ^/api/announcements, roles: PUBLIC_ACCESS, methods: [GET] }
         - { path: ^/api/announcements, roles: ROLE_BOUTIQUE_ADMIN }
         - { path: ^/api/filters, roles: PUBLIC_ACCESS, methods: [GET] }

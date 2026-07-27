@@ -27,6 +27,32 @@ final class RefundRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /** @return array{items: list<Refund>, total: int} */
+    public function findForBackoffice(string $boutiqueId, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('refund')
+            ->andWhere('refund.boutique = :boutiqueId')
+            ->setParameter('boutiqueId', $boutiqueId);
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(refund.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('refund.createdAt', 'DESC')
+            ->addOrderBy('refund.id', 'DESC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
     public function nextSequence(string $boutiqueId, int $year): int
     {
         $result = $this->createQueryBuilder('r')

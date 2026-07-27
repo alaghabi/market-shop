@@ -7,6 +7,7 @@ use App\Entity\Product;
 use App\Entity\Review;
 use App\Enum\ReviewStatus;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 
 /** @extends ServiceEntityRepository<Review> */
@@ -52,6 +53,58 @@ final class ReviewRepository extends ServiceEntityRepository
             ->orderBy('review.createdAt', 'DESC')
             ->getQuery()
             ->getResult();
+    }
+
+    /** @return array{items: list<Review>, total: int} */
+    public function findApprovedByBoutiquePaginated(Boutique $boutique, int $page, int $itemsPerPage): array
+    {
+        return $this->paginateReviews(
+            $this->createQueryBuilder('review')
+                ->andWhere('review.boutique = :boutique')
+                ->andWhere('review.status = :status')
+                ->setParameter('boutique', $boutique)
+                ->setParameter('status', ReviewStatus::Approved),
+            $page,
+            $itemsPerPage,
+        );
+    }
+
+    /** @return array{items: list<Review>, total: int} */
+    public function findApprovedByProductPaginated(Product $product, int $page, int $itemsPerPage): array
+    {
+        return $this->paginateReviews(
+            $this->createQueryBuilder('review')
+                ->andWhere('review.product = :product')
+                ->andWhere('review.status = :status')
+                ->setParameter('product', $product)
+                ->setParameter('status', ReviewStatus::Approved),
+            $page,
+            $itemsPerPage,
+        );
+    }
+
+    /** @return array{items: list<Review>, total: int} */
+    public function findByProductForAdminPaginated(Product $product, int $page, int $itemsPerPage): array
+    {
+        return $this->paginateReviews(
+            $this->createQueryBuilder('review')
+                ->andWhere('review.product = :product')
+                ->setParameter('product', $product),
+            $page,
+            $itemsPerPage,
+        );
+    }
+
+    /** @return array{items: list<Review>, total: int} */
+    public function findByBoutiqueForAdminPaginated(Boutique $boutique, int $page, int $itemsPerPage): array
+    {
+        return $this->paginateReviews(
+            $this->createQueryBuilder('review')
+                ->andWhere('review.boutique = :boutique')
+                ->setParameter('boutique', $boutique),
+            $page,
+            $itemsPerPage,
+        );
     }
 
     /** @return list<Review> */
@@ -246,6 +299,20 @@ final class ReviewRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /** @return array{items: list<Review>, total: int} */
+    public function findApprovedPlatformReviewsPaginated(int $page, int $itemsPerPage): array
+    {
+        return $this->paginateReviews(
+            $this->createQueryBuilder('review')
+                ->andWhere('review.product IS NULL')
+                ->andWhere('review.boutique IS NULL')
+                ->andWhere('review.status = :status')
+                ->setParameter('status', ReviewStatus::Approved),
+            $page,
+            $itemsPerPage,
+        );
+    }
+
     /** @return list<Review> */
     public function findPlatformReviewsForAdmin(): array
     {
@@ -255,5 +322,49 @@ final class ReviewRepository extends ServiceEntityRepository
             ->orderBy('review.createdAt', 'DESC')
             ->getQuery()
             ->getResult();
+    }
+
+    /** @return array{items: list<Review>, total: int} */
+    public function findPlatformReviewsForAdminPaginated(int $page, int $itemsPerPage): array
+    {
+        return $this->paginateReviews(
+            $this->createQueryBuilder('review')
+                ->andWhere('review.product IS NULL')
+                ->andWhere('review.boutique IS NULL'),
+            $page,
+            $itemsPerPage,
+        );
+    }
+
+    /** @return array{items: list<Review>, total: int} */
+    public function findAllForAdminPaginated(int $page, int $itemsPerPage): array
+    {
+        return $this->paginateReviews(
+            $this->createQueryBuilder('review'),
+            $page,
+            $itemsPerPage,
+        );
+    }
+
+    /** @return array{items: list<Review>, total: int} */
+    private function paginateReviews(QueryBuilder $query, int $page, int $itemsPerPage): array
+    {
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(review.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('review.createdAt', 'DESC')
+            ->addOrderBy('review.id', 'DESC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
     }
 }

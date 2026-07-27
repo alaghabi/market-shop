@@ -23,7 +23,7 @@ final readonly class NotificationService
     }
 
     /** @param array<string, string|int|float|bool|null> $variables */
-    public function dispatchExternal(?Boutique $boutique, string $eventCode, NotificationChannel $channel, string $recipient, array $variables = []): void
+    public function dispatchExternal(?Boutique $boutique, string $eventCode, NotificationChannel $channel, string $recipient, array $variables = [], ?string $orderId = null, ?string $deduplicationKey = null): void
     {
         $this->bus->dispatch(new DispatchNotificationMessage(
             $boutique ? (string) $boutique->getId() : null,
@@ -31,6 +31,27 @@ final readonly class NotificationService
             $channel->value,
             $recipient,
             $variables,
+            $orderId,
+            $deduplicationKey,
         ));
+    }
+
+    public function dispatchOrderConfirmation(\App\Entity\Order $order): void
+    {
+        $recipient = $order->getCustomerEmail();
+        if (null === $recipient || false === filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+
+        $orderId = (string) $order->getId();
+        $this->dispatchExternal(
+            $order->getBoutique(),
+            'order.confirmed',
+            NotificationChannel::Email,
+            $recipient,
+            [],
+            $orderId,
+            'order-confirmation:'.$orderId,
+        );
     }
 }

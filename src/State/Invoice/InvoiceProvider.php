@@ -5,13 +5,17 @@ namespace App\State\Invoice;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Invoice\InvoiceOutput;
 use App\Entity\Invoice;
 use App\Repository\BoutiqueRepository;
 use App\Repository\InvoiceRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Backoffice\BackofficeScopeResolver;
 use App\Service\Billing\InvoiceCacheService;
 use App\State\Common\BoutiqueAwareProviderTrait;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 
 /** @implements ProviderInterface<InvoiceOutput> */
 final readonly class InvoiceProvider implements ProviderInterface
@@ -23,12 +27,15 @@ final readonly class InvoiceProvider implements ProviderInterface
         private BoutiqueRepository $boutiques,
         private BoutiqueContext $context,
         private InvoiceCacheService $cache,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return list<InvoiceOutput>|InvoiceOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|InvoiceOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|InvoiceOutput|null
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $invoiceId = $uriVariables['id'] ?? null;
         if ($operation instanceof Get && null !== $invoiceId) {
             $invoice = $this->invoices->find((string) $invoiceId);
@@ -44,17 +51,41 @@ final readonly class InvoiceProvider implements ProviderInterface
         }
 
         if (str_starts_with((string) $operation->getUriTemplate(), '/admin/')) {
-            return $this->context->isSuperAdmin()
-                ? array_map([$this, 'toOutput'], $this->invoices->findBy([], ['createdAt' => 'DESC']))
-                : [];
+            if (!$this->context->isSuperAdmin()) {
+                return new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
+            }
+
+            $result = $this->invoices->findForBackoffice(
+                null,
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
+
+            return new BackofficePaginator(
+                array_map([$this, 'toOutput'], $result['items']),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+                $result['total'],
+            );
         }
 
         $boutique = $this->resolveBoutiqueFromRequest($context, $uriVariables);
         if (!$boutique instanceof \App\Entity\Boutique) {
-            return [];
+            return new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
         }
 
-        return $this->cache->getShopInvoices((string) $boutique->getId(), fn (): array => array_map([$this, 'toOutput'], $this->invoices->findByBoutique($boutique)));
+        $result = $this->invoices->findForBackoffice(
+            $boutique,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
+
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function canReadInvoice(Invoice $invoice, array $context, Operation $operation): bool

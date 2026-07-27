@@ -1,5 +1,5 @@
-.PHONY: start stop restart
-start: ## Start local stack + run migrations + create super admin
+.PHONY: start start-up stop restart
+start: ## Start local stack + run migrations
 	docker compose up -d
 	@table_count=$$(docker compose exec -T database psql -U app -d app -tAc "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'doctrine_migration_versions';"); \
 	existing_schema=$$(docker compose exec -T database psql -U app -d app -tAc "SELECT to_regclass('public.boutique') IS NOT NULL;"); \
@@ -19,7 +19,20 @@ start: ## Start local stack + run migrations + create super admin
 	docker compose run --rm app bin/console doctrine:migrations:migrate --no-interaction
 	docker compose run --rm app bin/console app:seed:permissions 2>/dev/null || true
 	docker compose run --rm app bin/console app:seed:role-permissions 2>/dev/null || true
-	docker compose run --rm app bin/console app:create-super-admin 2>/dev/null || true
+
+start-up: ## Start local stack + seed application data without migrations
+	docker compose up -d
+	docker compose run --rm app php bin/console app:seed:reference-data
+	docker compose run --rm app php bin/console app:seed:subscription-modules
+	docker compose run --rm app php bin/console app:seed:subscription-plans
+	docker compose run --rm app php bin/console app:seed:quota-definitions
+	docker compose run --rm app php bin/console app:seed:permissions
+	docker compose run --rm app php bin/console app:seed:role-permissions
+	docker compose run --rm app php bin/console app:seed:themes
+	docker compose run --rm app php bin/console app:seed:tunisian-delivery-companies
+	docker compose run --rm app php bin/console app:seed:extensions
+	docker compose run --rm app php bin/console app:seed:suggestion-categories
+	docker compose run --rm app php bin/console app:create-super-admin
 
 stop: ## Stop local stack
 	docker compose down

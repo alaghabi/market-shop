@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\Boutique;
 use App\Entity\Subscription;
 use App\Enum\SubscriptionStatus;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -28,6 +29,32 @@ final class SubscriptionRepository extends ServiceEntityRepository
             ->setParameter('to', $to)
             ->getQuery()
             ->getResult();
+    }
+
+    /** @return array{items: list<Subscription>, total: int} */
+    public function findByBoutiquePaginated(Boutique $boutique, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('subscription')
+            ->andWhere('subscription.boutique = :boutique')
+            ->setParameter('boutique', $boutique);
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(subscription.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('subscription.createdAt', 'DESC')
+            ->addOrderBy('subscription.id', 'DESC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
     }
 
     /** @return list<Subscription> */

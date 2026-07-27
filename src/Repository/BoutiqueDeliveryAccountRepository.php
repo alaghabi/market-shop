@@ -27,6 +27,21 @@ final class BoutiqueDeliveryAccountRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /** @return array{items: list<BoutiqueDeliveryAccount>, total: int} */
+    public function findForBackoffice(Boutique $boutique, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('account')->andWhere('account.boutique = :boutique')
+            ->setParameter('boutique', $boutique);
+        $countQuery = clone $query;
+        $total = (int) $countQuery->resetDQLPart('select')->resetDQLPart('orderBy')
+            ->select('COUNT(account.id)')->getQuery()->getSingleScalarResult();
+        $items = $query->orderBy('account.createdAt', 'DESC')->addOrderBy('account.id', 'DESC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)->setMaxResults($itemsPerPage)
+            ->getQuery()->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
     /** @return list<BoutiqueDeliveryAccount> */
     public function findActiveByBoutique(Boutique $boutique): array
     {

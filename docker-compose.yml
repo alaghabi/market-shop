@@ -20,6 +20,28 @@ services:
     environment:
       SERVER_NAME: :80
       APP_RUNTIME: Symfony\Component\Runtime\SymfonyRuntime
+      MERCURE_URL: http://mercure/.well-known/mercure
+      MERCURE_PUBLIC_URL: http://localhost:3000/.well-known/mercure
+      MERCURE_JWT_SECRET: '!ChangeMe_Mercure_JWT_Secret!'
+    depends_on:
+      - database
+      - redis
+      - supervisor
+
+  supervisor:
+    image: market-shop-app:local
+    build:
+      context: .
+      dockerfile: etc/docker/frankenphp/Dockerfile
+    entrypoint: ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    volumes:
+      - .:/app
+    working_dir: /app
+    environment:
+      APP_RUNTIME: Symfony\Component\Runtime\SymfonyRuntime
     depends_on:
       - database
       - redis
@@ -60,14 +82,18 @@ services:
   mercure:
     image: dunglas/mercure
     restart: unless-stopped
+    ports:
+      - "3000:80"
     environment:
+      SERVER_NAME: ':80'
       # Uncomment the following line to disable HTTPS,
       #SERVER_NAME: ':80'
-      MERCURE_PUBLISHER_JWT_KEY: '!ChangeThisMercureHubJWTSecretKey!'
-      MERCURE_SUBSCRIBER_JWT_KEY: '!ChangeThisMercureHubJWTSecretKey!'
+      MERCURE_PUBLISHER_JWT_KEY: '!ChangeMe_Mercure_JWT_Secret!'
+      MERCURE_SUBSCRIBER_JWT_KEY: '!ChangeMe_Mercure_JWT_Secret!'
       # Set the URL of your Symfony project (without trailing slash!) as value of the cors_origins directive
       MERCURE_EXTRA_DIRECTIVES: |
-        cors_origins http://127.0.0.1:8000
+        # Local development uses dynamic boutique subdomains (for example *.localhost:8082).
+        cors_origins *
     # Comment the following line to disable the development mode
     command: /usr/bin/caddy run --config /etc/caddy/dev.Caddyfile
     healthcheck:
@@ -79,21 +105,6 @@ services:
       - mercure_data:/data
       - mercure_config:/config
 ###< symfony/mercure-bundle ###
-
-  cron:
-    image: market-shop-app:local
-    build:
-      context: .
-      dockerfile: etc/docker/frankenphp/Dockerfile
-    entrypoint: ["sh", "-c", "while true; do php bin/console app:subscription-expiry; php bin/console app:extension-expiry; php bin/console app:delivery-process; php bin/console app:delivery-retry; php bin/console app:delivery-tracking-sync; sleep 60; done"]
-    volumes:
-      - .:/app
-    working_dir: /app
-    environment:
-      APP_RUNTIME: Symfony\Component\Runtime\SymfonyRuntime
-    depends_on:
-      - database
-      - redis
 
   ollama:
     image: ollama/ollama:latest

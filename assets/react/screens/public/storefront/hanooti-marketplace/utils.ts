@@ -32,6 +32,14 @@ export function findCategoryBySlug(categories: StoreCategory[], slug: string): S
   return null;
 }
 
+export function withProductCounts(categories: StoreCategory[], products: StoreProduct[]): StoreCategory[] {
+  return categories.map((category) => ({
+    ...category,
+    count: products.filter((product) => productMatchesCategory(product, category)).length,
+    children: withProductCounts(category.children, products),
+  }));
+}
+
 export function findCategoryParent(categories: StoreCategory[], childId: string): StoreCategory | null {
   for (const category of categories) {
     if (category.children.some((child) => child.id === childId)) return category;
@@ -71,10 +79,7 @@ export function filterProducts(products: StoreProduct[], query: string): StorePr
 }
 
 export function isPromotion(product: StoreProduct): boolean {
-  return Boolean(
-    (product.comparePriceCents && product.comparePriceCents > product.priceCents) ||
-      product.badge?.toLowerCase().includes('promo'),
-  );
+  return product.isPromoted === true;
 }
 
 export function sortProducts(products: StoreProduct[], sort: string): StoreProduct[] {
@@ -112,6 +117,7 @@ export function resolvePage(): PageKind {
   if (path.endsWith('/avis')) return 'reviews';
   if (path.endsWith('/a-propos')) return 'about';
   if (path.endsWith('/contact')) return 'contact';
+  if (path.includes('/pages/')) return 'cms';
   return 'home';
 }
 

@@ -6,6 +6,7 @@ import { Badge, statusBadge } from '../../components/Badge';
 import { LoadingState, ErrorState, EmptyState } from '../../components/States';
 import { useNotification } from '../../hooks/useNotification';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Pagination } from '../../components/Pagination';
 
 type QuotaRow = { code: string; name: string; unit: string | null; limit: number | null; usage: number; remaining: number | null };
 type ActiveExtension = { id: string; extensionCode: string; extensionName: string; type: string; activatedAt: string; expiresAt: string | null };
@@ -19,7 +20,7 @@ type SubscriptionSummary = {
   endDate: string | null;
   daysRemaining: number | null;
   quotas: QuotaRow[];
-  accessibleModules: string[];
+  accessibleModules: string[] | Record<string, string>;
   accessibleThemes: Array<{ id: string; code: string; name: string }>;
   activeExtensions: ActiveExtension[];
   pendingRequests: PendingRequest[];
@@ -51,6 +52,8 @@ type ExtensionRequestItem = {
   comment?: string | null;
   adminComment?: string | null;
 };
+
+const PAGE_SIZE = 20;
 
 const typeLabels: Record<string, string> = {
   quota_boost: 'Quota',
@@ -85,17 +88,21 @@ export function ExtensionsBoutiquePanel({ getAccessToken }: { getAccessToken: ()
   const [confirmRequestId, setConfirmRequestId] = useState<string | null>(null);
   const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [requestsPage, setRequestsPage] = useState(1);
 
   const fetchSummary = useCallback(() => api.get<SubscriptionSummary>('/subscription/summary'), [api]);
-  const fetchCatalog = useCallback(() => api.getCollection<ExtensionCatalogItem>('/extensions/available'), [api]);
-  const fetchRequests = useCallback(() => api.getCollection<ExtensionRequestItem>('/extension-requests'), [api]);
+  const fetchCatalog = useCallback(() => api.getCollection<ExtensionCatalogItem>(`/extensions/available?page=${catalogPage}&itemsPerPage=${PAGE_SIZE}`), [api, catalogPage]);
+  const fetchRequests = useCallback(() => api.getCollection<ExtensionRequestItem>(`/extension-requests?page=${requestsPage}&itemsPerPage=${PAGE_SIZE}`), [api, requestsPage]);
 
   const { data: summary, isLoading: summaryLoading, error: summaryError, refresh: refreshSummary } = useApiData(fetchSummary, []);
-  const { data: catalog, isLoading: catalogLoading, error: catalogError, refresh: refreshCatalog } = useApiData(fetchCatalog, []);
-  const { data: requestsData, refresh: refreshRequests } = useApiData(fetchRequests, []);
+  const { data: catalog, isLoading: catalogLoading, error: catalogError, refresh: refreshCatalog } = useApiData(fetchCatalog, [catalogPage]);
+  const { data: requestsData, refresh: refreshRequests } = useApiData(fetchRequests, [requestsPage]);
 
   const catalogList = catalog?.member ?? [];
   const requestsList = requestsData?.member ?? [];
+  const catalogTotalPages = Math.max(1, Math.ceil((catalog?.totalItems ?? 0) / PAGE_SIZE));
+  const requestsTotalPages = Math.max(1, Math.ceil((requestsData?.totalItems ?? 0) / PAGE_SIZE));
 
   const refreshAll = () => {
     refreshSummary();
@@ -217,7 +224,7 @@ export function ExtensionsBoutiquePanel({ getAccessToken }: { getAccessToken: ()
                 )}
                 <h4 style={{ fontSize: 13, textTransform: 'uppercase', color: 'var(--bo-text-muted)', marginBottom: 8 }}>Modules accessibles</h4>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {summary.accessibleModules.map((m) => <Badge key={m} tone="neutral">{m}</Badge>)}
+                  {(Array.isArray(summary.accessibleModules) ? summary.accessibleModules : Object.values(summary.accessibleModules ?? {})).map((m) => <Badge key={m} tone="neutral">{m}</Badge>)}
                 </div>
               </div>
             </div>
@@ -233,7 +240,7 @@ export function ExtensionsBoutiquePanel({ getAccessToken }: { getAccessToken: ()
         <CardBody>
           {catalogLoading ? <LoadingState /> : catalogError ? <ErrorState message={catalogError} onRetry={refreshCatalog} /> : catalogList.length === 0 ? <EmptyState /> : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-              {catalogList.map((ext) => (
+               {catalogList.map((ext) => (
                 <div key={ext.id} style={{ padding: 18, border: '1px solid var(--bo-border)', borderRadius: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
                     <strong>{ext.name}</strong>
@@ -254,8 +261,9 @@ export function ExtensionsBoutiquePanel({ getAccessToken }: { getAccessToken: ()
                     </Button>
                   )}
                 </div>
-              ))}
-            </div>
+               ))}
+               <Pagination page={catalogPage} totalPages={catalogTotalPages} onPageChange={setCatalogPage} />
+             </div>
           )}
         </CardBody>
       </Card>
@@ -265,7 +273,7 @@ export function ExtensionsBoutiquePanel({ getAccessToken }: { getAccessToken: ()
         <CardBody>
           {requestsList.length === 0 ? <EmptyState /> : (
             <div style={{ display: 'grid', gap: 8 }}>
-              {requestsList.map((req) => {
+               {requestsList.map((req) => {
                 const badge = statusBadge(req.status);
                 return (
                   <div key={req.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: '1px solid var(--bo-border)', borderRadius: 8 }}>
@@ -287,8 +295,9 @@ export function ExtensionsBoutiquePanel({ getAccessToken }: { getAccessToken: ()
                     </div>
                   </div>
                 );
-              })}
-            </div>
+               })}
+               <Pagination page={requestsPage} totalPages={requestsTotalPages} onPageChange={setRequestsPage} />
+             </div>
           )}
         </CardBody>
       </Card>

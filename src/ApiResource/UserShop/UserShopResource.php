@@ -42,6 +42,7 @@ use App\State\User\UserShopProcessor;
         new Patch(
             uriTemplate: '/admin/user-shops/{id}',
             security: "is_granted('ROLE_BOUTIQUE_ADMIN')",
+            read: false,
             output: UserShopOutput::class,
             processor: UserShopProcessor::class,
         ),

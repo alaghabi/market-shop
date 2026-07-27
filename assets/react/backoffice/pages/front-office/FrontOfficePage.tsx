@@ -5,6 +5,7 @@ import { Button } from '../../components/Button';
 import { Badge } from '../../components/Badge';
 import { LoadingState, ErrorState } from '../../components/States';
 import { FormField, Input, Textarea } from '../../components/FormField';
+import { MediaField } from '../../components/MediaField';
 import { PageHeader } from '../../layout/Shell';
 import { useNotification } from '../../hooks/useNotification';
 import { useBoutique } from '../../hooks/useBoutique';
@@ -33,14 +34,22 @@ type FrontOfficeSettings = {
   primaryColor?: string;
   accentColor?: string;
   backgroundColor?: string;
+  secondaryColor?: string;
+  textColor?: string;
 };
 
 function buildColorPalette(form: FrontOfficeSettings): Record<string, string> {
   return {
     ...(form.primaryColor ? { primary: form.primaryColor } : {}),
+    ...(form.secondaryColor ? { secondary: form.secondaryColor } : {}),
     ...(form.accentColor ? { accent: form.accentColor } : {}),
     ...(form.backgroundColor ? { background: form.backgroundColor } : {}),
+    ...(form.textColor ? { text: form.textColor } : {}),
   };
+}
+
+function normalizeHexColor(value: unknown, fallback: string): string {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
 }
 
 function ThemePreviewCard({
@@ -122,9 +131,11 @@ export function FrontOfficePage({ getAccessToken }: { getAccessToken: () => stri
       fontFamily: data.fontFamily ?? '',
       fontSize: data.fontSize ?? '',
       borderRadius: data.borderRadius ?? '',
-      primaryColor: data.primaryColor ?? data.colorPalette?.primary ?? '',
-      accentColor: data.colorPalette?.accent ?? '',
-      backgroundColor: data.colorPalette?.background ?? '',
+       primaryColor: normalizeHexColor(data.primaryColor ?? data.colorPalette?.primary, '#3525cd'),
+       secondaryColor: normalizeHexColor(data.secondaryColor ?? data.colorPalette?.secondary, '#505f76'),
+       accentColor: normalizeHexColor(data.accentColor ?? data.colorPalette?.accent ?? data.colorPalette?.primaryContainer, '#4f46e5'),
+       backgroundColor: normalizeHexColor(data.backgroundColor ?? data.colorPalette?.background, '#fcf8ff'),
+       textColor: normalizeHexColor(data.textColor ?? data.colorPalette?.text, '#1b1b24'),
     });
     return data;
   }, [api, boutique?.id]);
@@ -139,14 +150,17 @@ export function FrontOfficePage({ getAccessToken }: { getAccessToken: () => stri
       await api.patch('/settings', {
         theme: code,
         primaryColor: form.primaryColor || null,
+        secondaryColor: form.secondaryColor || null,
         colorPalette: customPalette,
       });
       setForm((f) => ({
         ...f,
-        theme: code,
-        primaryColor: customPalette.primary ?? f.primaryColor,
-        accentColor: customPalette.accent ?? f.accentColor,
-        backgroundColor: customPalette.background ?? f.backgroundColor,
+         theme: code,
+         primaryColor: customPalette.primary ?? f.primaryColor,
+         secondaryColor: customPalette.secondary ?? f.secondaryColor,
+         accentColor: customPalette.accent ?? f.accentColor,
+         backgroundColor: customPalette.background ?? f.backgroundColor,
+         textColor: customPalette.text ?? f.textColor,
       }));
       showNotice('Thème appliqué à votre boutique en ligne.', 'success');
     } catch (err) {
@@ -170,8 +184,10 @@ export function FrontOfficePage({ getAccessToken }: { getAccessToken: () => stri
         fontSize: form.fontSize || null,
         borderRadius: form.borderRadius || null,
         primaryColor: form.primaryColor || null,
+        secondaryColor: form.secondaryColor || null,
         accentColor: form.accentColor || null,
         backgroundColor: form.backgroundColor || null,
+        textColor: form.textColor || null,
         colorPalette: buildColorPalette(form),
       });
       showNotice('Boutique en ligne mise à jour.', 'success');
@@ -250,25 +266,23 @@ export function FrontOfficePage({ getAccessToken }: { getAccessToken: () => stri
                 <Textarea rows={3} value={form.description ?? ''} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
               </FormField>
               <div className="bo-form-row">
-                <FormField label="Logo (URL)">
-                  <Input value={form.logoUrl ?? ''} placeholder="https://..." onChange={(e) => setForm((f) => ({ ...f, logoUrl: e.target.value }))} />
-                </FormField>
-                <FormField label="Image de couverture (URL)">
-                  <Input value={form.coverImage ?? ''} placeholder="https://..." onChange={(e) => setForm((f) => ({ ...f, coverImage: e.target.value }))} />
-                </FormField>
+                <MediaField label="Logo" value={form.logoUrl} boutiqueId={boutique.id} hint="Utilisez une URL publique ou importez une image." onChange={(logoUrl) => setForm((f) => ({ ...f, logoUrl }))} />
+                <MediaField label="Image de couverture" value={form.coverImage} boutiqueId={boutique.id} maxSizeMb={10} hint="Utilisez une URL publique ou importez une image." onChange={(coverImage) => setForm((f) => ({ ...f, coverImage }))} />
               </div>
 
               <h3 style={{ marginTop: 24 }}>Couleurs & typographie</h3>
               <div className="bo-form-row">
                 <FormField label="Couleur principale">
-                  <Input type="color" value={form.primaryColor || '#3525cd'} onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value }))} />
+                  <Input type="color" value={normalizeHexColor(form.primaryColor, '#3525cd')} onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value }))} />
                 </FormField>
+                <FormField label="Couleur secondaire"><Input type="color" value={normalizeHexColor(form.secondaryColor, '#505f76')} onChange={(e) => setForm((f) => ({ ...f, secondaryColor: e.target.value }))} /></FormField>
                 <FormField label="Couleur accent">
-                  <Input type="color" value={form.accentColor || '#7c3aed'} onChange={(e) => setForm((f) => ({ ...f, accentColor: e.target.value }))} />
+                  <Input type="color" value={normalizeHexColor(form.accentColor, '#4f46e5')} onChange={(e) => setForm((f) => ({ ...f, accentColor: e.target.value }))} />
                 </FormField>
                 <FormField label="Fond">
-                  <Input type="color" value={form.backgroundColor || '#fcf8ff'} onChange={(e) => setForm((f) => ({ ...f, backgroundColor: e.target.value }))} />
+                  <Input type="color" value={normalizeHexColor(form.backgroundColor, '#fcf8ff')} onChange={(e) => setForm((f) => ({ ...f, backgroundColor: e.target.value }))} />
                 </FormField>
+                <FormField label="Couleur du texte"><Input type="color" value={normalizeHexColor(form.textColor, '#1b1b24')} onChange={(e) => setForm((f) => ({ ...f, textColor: e.target.value }))} /></FormField>
               </div>
               <div className="bo-form-row">
                 <FormField label="Police">

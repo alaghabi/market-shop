@@ -8,12 +8,26 @@ import { Modal } from '../../components/Modal';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { FormField, Input, Select } from '../../components/FormField';
 import { useNotification } from '../../hooks/useNotification';
+import { Pagination } from '../../components/Pagination';
+
+type CredentialField = {
+  key: 'login' | 'password' | 'apiKey' | 'token' | 'secret' | 'customBaseUrl';
+  label: string;
+  type?: string;
+  required?: boolean;
+  hint?: string | null;
+};
 
 type DeliveryCompany = {
   id: string;
   name: string;
   slug: string;
   provider: string;
+  authType?: string;
+  authConfig?: {
+    credentialFields?: CredentialField[];
+  };
+  credentialFields?: CredentialField[];
   logoUrl?: string | null;
   description?: string | null;
   isActive: boolean;
@@ -62,7 +76,38 @@ const emptyAccountForm: AccountForm = {
   deliveryCompanyId: '', login: '', password: '', apiKey: '', token: '', secret: '', customBaseUrl: '',
 };
 
+const FALLBACK_FIELDS: CredentialField[] = [
+  { key: 'login', label: 'Identifiant', type: 'text', required: false },
+  { key: 'password', label: 'Mot de passe', type: 'password', required: false },
+  { key: 'apiKey', label: 'Clé API', type: 'password', required: false },
+  { key: 'token', label: 'Token', type: 'password', required: false },
+  { key: 'secret', label: 'Secret', type: 'password', required: false },
+  { key: 'customBaseUrl', label: 'URL personnalisée', type: 'text', required: false, hint: 'Optionnel' },
+];
+
+function resolveCredentialFields(company: DeliveryCompany | undefined): CredentialField[] {
+  const configured = company?.credentialFields ?? company?.authConfig?.credentialFields;
+  if (Array.isArray(configured) && configured.length > 0) {
+    return configured.filter((field): field is CredentialField => Boolean(field?.key && field?.label));
+  }
+
+  switch (company?.authType) {
+    case 'bearer':
+      return [{ key: 'token', label: 'Jeton API', type: 'password', required: true }];
+    case 'api_key':
+      return [{ key: 'apiKey', label: 'Clé API', type: 'password', required: true }];
+    case 'basic':
+      return [
+        { key: 'login', label: 'Identifiant', type: 'text', required: true },
+        { key: 'password', label: 'Mot de passe', type: 'password', required: true },
+      ];
+    default:
+      return FALLBACK_FIELDS;
+  }
+}
+
 type Tab = 'accounts' | 'shipments';
+const PAGE_SIZE = 20;
 
 export function DeliveryBoutiquePanel({ getAccessToken }: { getAccessToken: () => string | null }) {
   const api = useApiClient(getAccessToken);
@@ -80,20 +125,26 @@ export function DeliveryBoutiquePanel({ getAccessToken }: { getAccessToken: () =
   const [shipmentAccountId, setShipmentAccountId] = useState('');
   const [creatingShipment, setCreatingShipment] = useState(false);
   const [busyShipmentId, setBusyShipmentId] = useState<string | null>(null);
+  const [accountPage, setAccountPage] = useState(1);
+  const [shipmentPage, setShipmentPage] = useState(1);
 
-  const fetchCompanies = useCallback(() => api.getCollection<DeliveryCompany>('/delivery/companies'), [api]);
-  const fetchAccounts = useCallback(() => api.getCollection<DeliveryAccount>('/delivery-accounts'), [api]);
-  const fetchShipments = useCallback(() => api.getCollection<Shipment>('/delivery/shipments'), [api]);
+  const fetchCompanies = useCallback(() => api.getCollection<DeliveryCompany>('/delivery/companies?itemsPerPage=100'), [api]);
+  const fetchAccounts = useCallback(() => api.getCollection<DeliveryAccount>(`/delivery-accounts?page=${accountPage}&itemsPerPage=${PAGE_SIZE}`), [api, accountPage]);
+  const fetchShipments = useCallback(() => api.getCollection<Shipment>(`/delivery/shipments?page=${shipmentPage}&itemsPerPage=${PAGE_SIZE}`), [api, shipmentPage]);
 
   const { data: companiesData, isLoading: companiesLoading } = useApiData(fetchCompanies, [tab]);
-  const { data: accountsData, isLoading: accountsLoading, error: accountsError, refresh: refreshAccounts } = useApiData(fetchAccounts, [tab]);
-  const { data: shipmentsData, isLoading: shipmentsLoading, error: shipmentsError, refresh: refreshShipments } = useApiData(fetchShipments, [tab]);
+  const { data: accountsData, isLoading: accountsLoading, error: accountsError, refresh: refreshAccounts } = useApiData(fetchAccounts, [tab, accountPage]);
+  const { data: shipmentsData, isLoading: shipmentsLoading, error: shipmentsError, refresh: refreshShipments } = useApiData(fetchShipments, [tab, shipmentPage]);
 
   const companies = companiesData?.member ?? [];
   const accounts = accountsData?.member ?? [];
   const shipments = shipmentsData?.member ?? [];
+  const accountTotalPages = Math.max(1, Math.ceil((accountsData?.totalItems ?? 0) / PAGE_SIZE));
+  const shipmentTotalPages = Math.max(1, Math.ceil((shipmentsData?.totalItems ?? 0) / PAGE_SIZE));
 
   const availableCompanies = companies.filter((c) => c.isActive && !accounts.some((a) => a.deliveryCompanyId === c.id));
+  const selectedCompany = companies.find((company) => company.id === accountForm.deliveryCompanyId);
+  const credentialFields = resolveCredentialFields(selectedCompany);
 
   const openAddAccount = () => {
     setAccountForm(emptyAccountForm);
@@ -105,17 +156,26 @@ export function DeliveryBoutiquePanel({ getAccessToken }: { getAccessToken: () =
       showNotice('Sélectionnez une société de livraison.', 'error');
       return;
     }
+
+    for (const field of credentialFields) {
+      if (!field.required) continue;
+      const value = accountForm[field.key]?.trim() ?? '';
+      if (!value) {
+        showNotice(`Le champ « ${field.label} » est obligatoire.`, 'error');
+        return;
+      }
+    }
+
     setSavingAccount(true);
     try {
-      await api.post('/delivery-accounts', {
+      const payload: Record<string, string | null> = {
         deliveryCompanyId: accountForm.deliveryCompanyId,
-        login: accountForm.login.trim() || null,
-        password: accountForm.password.trim() || null,
-        apiKey: accountForm.apiKey.trim() || null,
-        token: accountForm.token.trim() || null,
-        secret: accountForm.secret.trim() || null,
-        customBaseUrl: accountForm.customBaseUrl.trim() || null,
-      });
+      };
+      for (const field of credentialFields) {
+        const value = accountForm[field.key].trim();
+        payload[field.key] = value || null;
+      }
+      await api.post('/delivery-accounts', payload);
       showNotice('Compte transporteur ajouté', 'success');
       setAccountModalOpen(false);
       refreshAccounts();
@@ -255,7 +315,7 @@ export function DeliveryBoutiquePanel({ getAccessToken }: { getAccessToken: () =
               <EmptyState title="Aucun transporteur configuré" message="Ajoutez un compte pour commencer à expédier vos commandes." action={{ label: 'Ajouter un compte', onClick: openAddAccount }} />
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
-                {accounts.map((account) => (
+                 {accounts.map((account) => (
                   <div key={account.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: '1px solid var(--bo-border)', borderRadius: 8, flexWrap: 'wrap', gap: 8 }}>
                     <div>
                       <strong>{account.deliveryCompanyName}</strong>
@@ -279,8 +339,9 @@ export function DeliveryBoutiquePanel({ getAccessToken }: { getAccessToken: () =
                       <Button variant="danger" size="sm" onClick={() => setDeleteAccountId(account.id)}>Suppr.</Button>
                     </div>
                   </div>
-                ))}
-              </div>
+                 ))}
+                 <Pagination page={accountPage} totalPages={accountTotalPages} onPageChange={setAccountPage} />
+               </div>
             )}
           </CardBody>
         </Card>
@@ -297,7 +358,7 @@ export function DeliveryBoutiquePanel({ getAccessToken }: { getAccessToken: () =
           <CardBody>
             {shipmentsLoading ? <LoadingState /> : shipmentsError ? <ErrorState message={shipmentsError} onRetry={refreshShipments} /> : shipments.length === 0 ? <EmptyState /> : (
               <div style={{ display: 'grid', gap: 8 }}>
-                {shipments.map((shipment) => {
+                 {shipments.map((shipment) => {
                   const badge = statusBadge(shipment.status);
                   const busy = busyShipmentId === shipment.id;
                   const isFinal = ['delivered', 'cancelled', 'return'].includes(shipment.status);
@@ -327,8 +388,9 @@ export function DeliveryBoutiquePanel({ getAccessToken }: { getAccessToken: () =
                       </div>
                     </div>
                   );
-                })}
-              </div>
+                 })}
+                 <Pagination page={shipmentPage} totalPages={shipmentTotalPages} onPageChange={setShipmentPage} />
+               </div>
             )}
           </CardBody>
         </Card>
@@ -348,25 +410,37 @@ export function DeliveryBoutiquePanel({ getAccessToken }: { getAccessToken: () =
       >
         <div style={{ display: 'grid', gap: 14 }}>
           <FormField label="Société de livraison" required>
-            <Select value={accountForm.deliveryCompanyId} onChange={(e) => setAccountForm({ ...accountForm, deliveryCompanyId: e.target.value })}>
+            <Select
+              value={accountForm.deliveryCompanyId}
+              onChange={(e) => setAccountForm({ ...emptyAccountForm, deliveryCompanyId: e.target.value })}
+            >
               <option value="">Sélectionner une société</option>
-              {availableCompanies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {availableCompanies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}{c.description ? ` — ${c.description}` : ''}
+                </option>
+              ))}
             </Select>
           </FormField>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <FormField label="Identifiant / Login"><Input value={accountForm.login} onChange={(e) => setAccountForm({ ...accountForm, login: e.target.value })} /></FormField>
-            <FormField label="Mot de passe"><Input type="password" value={accountForm.password} onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })} /></FormField>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <FormField label="Clé API"><Input value={accountForm.apiKey} onChange={(e) => setAccountForm({ ...accountForm, apiKey: e.target.value })} /></FormField>
-            <FormField label="Token"><Input value={accountForm.token} onChange={(e) => setAccountForm({ ...accountForm, token: e.target.value })} /></FormField>
-          </div>
-          <FormField label="Secret" hint="Utilisé pour la signature de certaines API (ex: Aramex)">
-            <Input value={accountForm.secret} onChange={(e) => setAccountForm({ ...accountForm, secret: e.target.value })} />
-          </FormField>
-          <FormField label="URL personnalisée" hint="Optionnel, remplace l'URL de base par défaut">
-            <Input value={accountForm.customBaseUrl} onChange={(e) => setAccountForm({ ...accountForm, customBaseUrl: e.target.value })} />
-          </FormField>
+          {selectedCompany?.description && (
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--bo-text-secondary)' }}>{selectedCompany.description}</p>
+          )}
+          {!accountForm.deliveryCompanyId ? (
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--bo-text-muted)' }}>
+              Choisissez un transporteur pour afficher les champs d&apos;authentification requis.
+            </p>
+          ) : (
+            credentialFields.map((field) => (
+              <FormField key={field.key} label={field.label} required={field.required} hint={field.hint ?? undefined}>
+                <Input
+                  type={field.type === 'password' ? 'password' : 'text'}
+                  value={accountForm[field.key]}
+                  onChange={(e) => setAccountForm({ ...accountForm, [field.key]: e.target.value })}
+                  autoComplete="off"
+                />
+              </FormField>
+            ))
+          )}
         </div>
       </Modal>
 

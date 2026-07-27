@@ -8,7 +8,11 @@ use App\Repository\DeliveryRuleRepository;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
+use App\Service\Backoffice\BackofficeScopeResolver;
 use App\State\Common\BoutiqueAwareProviderTrait;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 
 final class DeliveryRuleProvider implements ProviderInterface
 {
@@ -16,20 +20,33 @@ final class DeliveryRuleProvider implements ProviderInterface
 
     public function __construct(
         private DeliveryRuleRepository $rules,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): object|array|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|DeliveryRuleOutput|null
     {
         if ($operation instanceof GetCollection) {
+            $request = $context['request'] ?? null;
+            $request = $request instanceof Request ? $request : null;
+            $pagination = $this->scope->pagination($request);
             $boutique = $this->resolveBoutiqueFromRequest($context);
             if (!$boutique) {
-                return [];
+                return new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
             }
 
-            $rules = $this->rules->findByBoutique($boutique);
+            $result = $this->rules->findForBackoffice(
+                $boutique,
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
 
-            return array_map($this->toOutput(...), $rules);
+            return new BackofficePaginator(
+                array_map($this->toOutput(...), $result['items']),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+                $result['total'],
+            );
         }
 
         $rule = $this->rules->find($uriVariables['id'] ?? null);

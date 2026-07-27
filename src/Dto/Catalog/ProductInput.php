@@ -93,7 +93,9 @@ final class ProductInput
     /** @var list<string> */
     public array $images = [];
 
-    /** @var array<string, string> */
+    public ?string $defaultImageUrl = null;
+
+    /** @var array<string, string|list<string>> */
     public array $filterValues = [];
 
     /** @var list<array{sku?: string, barcode?: string, sellingPrice?: int, comparePrice?: int, quantity?: int, image?: string, isDefault?: bool, attributes?: array<array{name: string, value: string}>}> */

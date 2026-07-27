@@ -23,6 +23,21 @@ final class MessageRepository extends ServiceEntityRepository
         }
     }
 
+    public function findBotResponseAfter(Message $userMessage): ?Message
+    {
+        return $this->createQueryBuilder('message')
+            ->andWhere('message.conversation = :conversation')
+            ->andWhere('message.senderType = :senderType')
+            ->andWhere('message.createdAt > :createdAt')
+            ->setParameter('conversation', $userMessage->getConversation())
+            ->setParameter('senderType', 'bot')
+            ->setParameter('createdAt', $userMessage->getCreatedAt())
+            ->orderBy('message.createdAt', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
     /** @return array<Message> */
     public function findUnreadByConversation(string $conversationId): array
     {

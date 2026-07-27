@@ -26,4 +26,21 @@ final class SubscriptionPlanRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /** @return array{items: list<SubscriptionPlan>, total: int} */
+    public function findForBackoffice(bool $visibleOnly, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('plan');
+        if ($visibleOnly) {
+            $query->andWhere('plan.isActive = true')->andWhere('plan.isVisible = true');
+        }
+        $countQuery = clone $query;
+        $total = (int) $countQuery->resetDQLPart('select')->resetDQLPart('orderBy')
+            ->select('COUNT(plan.id)')->getQuery()->getSingleScalarResult();
+        $items = $query->orderBy('plan.priceTnd', 'ASC')->addOrderBy('plan.id', 'ASC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)->setMaxResults($itemsPerPage)
+            ->getQuery()->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
 }

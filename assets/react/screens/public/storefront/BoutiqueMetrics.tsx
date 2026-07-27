@@ -1,15 +1,18 @@
 export function BoutiqueMetrics({
+  productsCount = 0,
   customersWithAccount = 0,
   customersWithoutAccount = 0,
   ordersCount = 0,
   customerAccountsEnabled = true,
 }: {
+  productsCount?: number;
   customersWithAccount?: number;
   customersWithoutAccount?: number;
   ordersCount?: number;
   customerAccountsEnabled?: boolean;
 }) {
   const metrics = [
+    { label: 'Produits', value: productsCount },
     ...(customerAccountsEnabled ? [{ label: 'Clients avec compte', value: customersWithAccount }] : []),
     { label: 'Clients sans compte', value: customersWithoutAccount },
     { label: 'Commandes', value: ordersCount },

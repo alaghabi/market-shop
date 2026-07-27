@@ -22,12 +22,51 @@ final class CmsPageRepository extends ServiceEntityRepository
         return $this->findBy(['boutique' => $boutique], ['sortOrder' => 'ASC', 'createdAt' => 'DESC']);
     }
 
+    /** @return array{items: list<CmsPage>, total: int} */
+    public function findForBackoffice(?Boutique $boutique, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('page');
+
+        if ($boutique instanceof Boutique) {
+            $query->andWhere('page.boutique = :boutique')
+                ->setParameter('boutique', $boutique);
+        }
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(page.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('page.sortOrder', 'ASC')
+            ->addOrderBy('page.createdAt', 'DESC')
+            ->addOrderBy('page.id', 'ASC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
     /** @return CmsPage[] */
     public function findPublishedByBoutique(Boutique $boutique): array
     {
         return $this->findBy(
             ['boutique' => $boutique, 'status' => CmsPageStatus::Published],
             ['sortOrder' => 'ASC'],
+        );
+    }
+
+    /** @return CmsPage[] */
+    public function findPublishedByBoutiqueAndHeader(Boutique $boutique): array
+    {
+        return $this->findBy(
+            ['boutique' => $boutique, 'status' => CmsPageStatus::Published, 'showInHeader' => true],
+            ['sortOrder' => 'ASC', 'createdAt' => 'DESC'],
         );
     }
 

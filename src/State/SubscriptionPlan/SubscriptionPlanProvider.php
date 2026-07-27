@@ -4,10 +4,14 @@ namespace App\State\SubscriptionPlan;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\SubscriptionPlan\SubscriptionPlanOutput;
 use App\Entity\SubscriptionPlan;
 use App\Repository\SubscriptionPlanRepository;
 use App\Repository\SubscriptionModuleRepository;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /** @implements ProviderInterface<SubscriptionPlanOutput> */
@@ -16,18 +20,30 @@ final class SubscriptionPlanProvider implements ProviderInterface
     public function __construct(
         private readonly SubscriptionPlanRepository $repository,
         private readonly SubscriptionModuleRepository $subscriptionModules,
+        private readonly BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return array<SubscriptionPlanOutput>|SubscriptionPlanOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|SubscriptionPlanOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|SubscriptionPlanOutput|null
     {
         $operationName = $operation->getName() ?? '';
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
 
         if ('boutique_subscription_plans' === $operationName) {
-            $entities = $this->repository->findVisibleForBoutique();
+            $result = $this->repository->findForBackoffice(
+                true,
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
 
-            return array_map([$this, 'toOutput'], $entities);
+            return new BackofficePaginator(
+                array_map([$this, 'toOutput'], $result['items']),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+                $result['total'],
+            );
         }
 
         if (isset($uriVariables['id'])) {
@@ -39,9 +55,18 @@ final class SubscriptionPlanProvider implements ProviderInterface
             return $this->toOutput($entity);
         }
 
-        $entities = $this->repository->findBy([], ['priceTnd' => 'ASC']);
+        $result = $this->repository->findForBackoffice(
+            false,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
 
-        return array_map([$this, 'toOutput'], $entities);
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function toOutput(SubscriptionPlan $entity): SubscriptionPlanOutput

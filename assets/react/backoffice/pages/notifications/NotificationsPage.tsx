@@ -8,6 +8,7 @@ import { Badge } from "../../components/Badge";
 import { LoadingState, EmptyState, ErrorState } from "../../components/States";
 import { FiltersBar } from "../../components/FiltersBar";
 import { notificationLink } from "../../utils/notificationLink";
+import { Pagination } from "../../components/Pagination";
 
 type NotificationItem = {
   id: string;
@@ -32,14 +33,16 @@ export function NotificationsPage({
   const isSuperAdmin = userRoles.includes("ROLE_SUPER_ADMIN");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   const fetchNotifications = useCallback(
-    () => api.getCollection<NotificationItem>("/notifications"),
-    [api],
+    () => api.getCollection<NotificationItem>(`/notifications?page=${page}&itemsPerPage=${pageSize}`),
+    [api, page],
   );
   const { data, isLoading, error, refresh } = useApiData(
     fetchNotifications,
-    [],
+    [page],
   );
   const notifications = (data?.member ?? []).filter((item) => {
     const matchesSearch =
@@ -82,9 +85,9 @@ export function NotificationsPage({
         <CardBody>
           <FiltersBar
             search={search}
-            onSearchChange={setSearch}
+            onSearchChange={(value) => { setSearch(value); setPage(1); }}
             status={status}
-            onStatusChange={setStatus}
+            onStatusChange={(value) => { setStatus(value); setPage(1); }}
             statusOptions={[
               { value: "unread", label: "Non lues" },
               { value: "read", label: "Lues" },
@@ -178,6 +181,7 @@ export function NotificationsPage({
               ))}
             </div>
           )}
+          <Pagination page={page} totalPages={Math.max(1, Math.ceil((data?.totalItems ?? 0) / pageSize))} onPageChange={setPage} />
         </CardBody>
       </Card>
     </div>

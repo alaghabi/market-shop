@@ -4,29 +4,38 @@ namespace App\State\Boutique;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Boutique\BoutiqueOutput;
 use App\Entity\Customer;
 use App\Entity\Order;
 use App\Repository\BoutiqueRepository;
+use App\Repository\ChatbotConfigRepository;
+use App\Repository\CmsPageRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Backoffice\BackofficeScopeResolver;
 use App\Service\Module\ModuleAccessService;
+use App\State\Common\BackofficePaginator;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
+use Symfony\Component\HttpFoundation\Request;
 
 final class BoutiqueProvider implements ProviderInterface
 {
     public function __construct(
         private readonly BoutiqueRepository $repository,
         private readonly BoutiqueContext $context,
-        private readonly AuthorizationCheckerInterface $authorizationChecker,
         private readonly ModuleAccessService $moduleAccess,
+        private readonly ChatbotConfigRepository $chatbotConfigs,
+        private readonly CmsPageRepository $cmsPages,
         private readonly EntityManagerInterface $em,
+        private readonly BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return array<BoutiqueOutput>|BoutiqueOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|BoutiqueOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|BoutiqueOutput|null
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $identifier = $uriVariables['id'] ?? $uriVariables['slug'] ?? null;
         if (null !== $identifier) {
             $entity = $this->repository->findBySlugOrId($identifier);
@@ -34,9 +43,9 @@ final class BoutiqueProvider implements ProviderInterface
                 return null;
             }
 
-            $isAdmin = $this->authorizationChecker->isGranted('ROLE_BOUTIQUE_ADMIN');
+            $isStaff = $this->context->isStaff();
 
-            if ($isAdmin) {
+            if ($isStaff) {
                 if (!$this->context->canAccessBoutique($entity)) {
                     return null;
                 }
@@ -47,13 +56,26 @@ final class BoutiqueProvider implements ProviderInterface
             return $this->toOutput($entity);
         }
 
-        if ($this->authorizationChecker->isGranted('ROLE_BOUTIQUE_ADMIN')) {
-            $entities = $this->repository->findVisibleTo($this->context->getBoutiqueIds(), $this->context->isSuperAdmin());
+        if ($this->context->isStaff()) {
+            $result = $this->repository->findVisibleToPaginated(
+                $this->context->getBoutiqueIds(),
+                $this->context->isSuperAdmin(),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
         } else {
-            $entities = $this->repository->findPublishedForPublic();
+            $result = $this->repository->findPublishedForPublicPaginated(
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
         }
 
-        return array_map([$this, 'toOutput'], $entities);
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function toOutput(object $entity): BoutiqueOutput
@@ -91,6 +113,8 @@ final class BoutiqueProvider implements ProviderInterface
         $moduleConfig = $entity->getSettings()?->getModuleConfig() ?? [];
         $output->customerAccountsEnabled = $this->moduleAccess->isModuleEnabled('customer_auth', $entity)
             && (!array_key_exists('enable_customer_auth', $moduleConfig) || true === (bool) $moduleConfig['enable_customer_auth']);
+        $output->chatbotEnabled = $this->moduleAccess->isModuleEnabled('chatbot', $entity)
+            && null !== $this->chatbotConfigs->findEnabledByBoutique($entity);
 
         if ($output->analyticsEnabled) {
             $output->customersWithAccount = $this->countCustomers($entity, true);
@@ -139,6 +163,22 @@ final class BoutiqueProvider implements ProviderInterface
             $output->address = null;
             $output->socialLinks = [];
         }
+
+        $cmsPages = $this->cmsPages->findPublishedByBoutiqueAndHeader($entity);
+        $output->frontOfficePages = array_values(array_merge(
+            $output->frontOfficePages,
+            array_map(
+                static fn ($page, int $index): array => [
+                    'slug' => $page->getSlug(),
+                    'label' => $page->getTitle(),
+                    'enabled' => true,
+                    'position' => 1000 + $index,
+                    'source' => 'cms',
+                ],
+                $cmsPages,
+                array_keys($cmsPages),
+            ),
+        ));
 
         return $output;
     }

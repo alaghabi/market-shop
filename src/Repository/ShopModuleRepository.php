@@ -27,6 +27,24 @@ final class ShopModuleRepository extends ServiceEntityRepository
         return $this->findBy(['boutique' => $boutique], ['createdAt' => 'ASC']);
     }
 
+    /** @return array{items: list<ShopModule>, total: int} */
+    public function findForBackoffice(Boutique $boutique, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('shopModule')
+            ->andWhere('shopModule.boutique = :boutique')
+            ->setParameter('boutique', $boutique);
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery->resetDQLPart('select')->resetDQLPart('orderBy')
+            ->select('COUNT(shopModule.id)')->getQuery()->getSingleScalarResult();
+
+        $items = $query->orderBy('shopModule.createdAt', 'ASC')->addOrderBy('shopModule.id', 'ASC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)->setMaxResults($itemsPerPage)
+            ->getQuery()->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
     /** @return ShopModule[] */
     public function findEnabledByBoutique(Boutique $boutique): array
     {

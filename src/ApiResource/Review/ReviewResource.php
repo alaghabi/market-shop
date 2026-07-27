@@ -67,7 +67,7 @@ use App\State\Review\ReviewProvider;
         ),
         new Delete(
             uriTemplate: '/reviews/{id}',
-            security: "is_granted('ROLE_SUPER_ADMIN')",
+            security: "is_granted('ROLE_BOUTIQUE_ADMIN') or is_granted('ROLE_SUPER_ADMIN')",
             read: false,
             processor: ReviewProcessor::class,
         ),

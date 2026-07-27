@@ -18,7 +18,12 @@ export function Modal({
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
   const titleId = useId();
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (isOpen) {
@@ -36,7 +41,7 @@ export function Modal({
     closeButtonRef.current?.focus();
 
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
       if ('Tab' !== e.key || !dialogRef.current) return;
 
       const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
@@ -56,7 +61,7 @@ export function Modal({
     }
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   return (
     <AnimatePresence>

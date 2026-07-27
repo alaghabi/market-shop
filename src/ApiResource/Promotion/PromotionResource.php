@@ -19,7 +19,7 @@ use App\State\Promotion\PromotionProvider;
         new GetCollection(uriTemplate: '/promotions', output: PromotionOutput::class, provider: PromotionProvider::class),
         new Post(uriTemplate: '/promotions', security: "is_granted('ROLE_BOUTIQUE_ADMIN')", input: PromotionInput::class, output: PromotionOutput::class, processor: PromotionProcessor::class),
         new Get(uriTemplate: '/promotions/{id}', output: PromotionOutput::class, provider: PromotionProvider::class),
-        new Patch(uriTemplate: '/promotions/{id}', security: "is_granted('ROLE_BOUTIQUE_ADMIN')", input: PromotionInput::class, output: PromotionOutput::class, processor: PromotionProcessor::class),
+        new Patch(uriTemplate: '/promotions/{id}', security: "is_granted('ROLE_BOUTIQUE_ADMIN')", read: false, input: PromotionInput::class, output: PromotionOutput::class, processor: PromotionProcessor::class),
         new Delete(uriTemplate: '/promotions/{id}', security: "is_granted('ROLE_BOUTIQUE_ADMIN')", processor: PromotionProcessor::class),
     ],
 )]

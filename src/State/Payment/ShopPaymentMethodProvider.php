@@ -4,14 +4,18 @@ namespace App\State\Payment;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Payment\ShopPaymentMethodOutput;
 use App\Entity\ShopPaymentMethod;
 use App\Repository\ShopPaymentMethodRepository;
 use App\Security\BoutiqueContext;
 use App\Service\AppConfigService;
+use App\Service\Backoffice\BackofficeScopeResolver;
 use App\Service\FrontOfficeCacheService;
 use App\State\Common\BoutiqueAwareProviderTrait;
+use App\State\Common\BackofficePaginator;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpFoundation\Request;
 
 /** @implements ProviderInterface<ShopPaymentMethodOutput> */
 final readonly class ShopPaymentMethodProvider implements ProviderInterface
@@ -24,23 +28,28 @@ final readonly class ShopPaymentMethodProvider implements ProviderInterface
         private Security $security,
         private FrontOfficeCacheService $cache,
         private AppConfigService $appConfig,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return list<ShopPaymentMethodOutput>|ShopPaymentMethodOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|ShopPaymentMethodOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|ShopPaymentMethodOutput|null
     {
-        unset($operation);
-
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $boutique = $this->resolveBoutiqueFromRequest($context);
         if (!$boutique) {
-            return isset($uriVariables['id']) ? null : [];
+            return isset($uriVariables['id'])
+                ? null
+                : new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
         }
 
         $canManage = null !== $this->security->getUser() && $this->context->canAccessBoutique($boutique);
 
         if (!$canManage && !$this->appConfig->isModuleEnabled('paiements')) {
-            return isset($uriVariables['id']) ? null : [];
+            return isset($uriVariables['id'])
+                ? null
+                : new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
         }
 
         if (isset($uriVariables['id'])) {
@@ -53,15 +62,19 @@ final readonly class ShopPaymentMethodProvider implements ProviderInterface
                 : null;
         }
 
-        $methods = $canManage
-            ? $this->methods->findByBoutique($boutique)
-            : null;
+        $result = $this->methods->findForBackoffice(
+            $boutique,
+            !$canManage,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
 
-        if (!$canManage) {
-            return array_map([$this, 'fromCachedArray'], $this->cache->getPaymentMethods((string) $boutique->getId()));
-        }
-
-        return array_map([$this, 'toOutput'], $methods);
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function toOutput(ShopPaymentMethod $method): ShopPaymentMethodOutput

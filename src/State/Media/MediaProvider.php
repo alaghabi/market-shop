@@ -5,10 +5,14 @@ namespace App\State\Media;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Media\MediaOutput;
 use App\Entity\Media;
 use App\Repository\MediaRepository;
+use App\Service\Backoffice\BackofficeScopeResolver;
 use App\State\Common\BoutiqueAwareProviderTrait;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 
 /** @implements ProviderInterface<MediaOutput> */
 final readonly class MediaProvider implements ProviderInterface
@@ -17,15 +21,20 @@ final readonly class MediaProvider implements ProviderInterface
 
     public function __construct(
         private MediaRepository $media,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return list<MediaOutput>|MediaOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|MediaOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|MediaOutput|null
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $boutique = $this->resolveBoutiqueFromRequest($context);
         if (!$boutique) {
-            return $operation instanceof Get ? null : [];
+            return $operation instanceof Get
+                ? null
+                : new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
         }
 
         if ($operation instanceof Get) {
@@ -36,9 +45,17 @@ final readonly class MediaProvider implements ProviderInterface
                 : null;
         }
 
-        return array_map(
-            [$this, 'toOutput'],
-            $this->media->findByBoutique($boutique),
+        $result = $this->media->findForBackoffice(
+            $boutique,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
+
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
         );
     }
 

@@ -7,7 +7,6 @@ use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Link;
-use ApiPlatform\Metadata\Post;
 use App\State\Media\MediaProvider;
 use App\State\Media\MediaProcessor;
 
@@ -19,7 +18,6 @@ const BOUTIQUE_MEDIA_URI_VARIABLES = [
     shortName: 'Media',
     operations: [
         new GetCollection(uriTemplate: '/media', output: \App\Dto\Media\MediaOutput::class, provider: MediaProvider::class),
-        new Post(uriTemplate: '/media/upload', security: "is_granted('ROLE_BOUTIQUE_ADMIN')", read: false, inputFormats: ['multipart' => ['multipart/form-data']], processor: MediaProcessor::class),
         new Get(uriTemplate: '/media/{id}', uriVariables: ['id' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id')], output: \App\Dto\Media\MediaOutput::class, provider: MediaProvider::class),
         new Delete(uriTemplate: '/media/{id}', uriVariables: ['id' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id')], security: "is_granted('ROLE_BOUTIQUE_ADMIN')", read: false, processor: MediaProcessor::class),
     ],

@@ -48,7 +48,7 @@ export function Header({
   const [userOpen, setUserOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const fetchNotifications = useCallback(
-    () => api.getCollection<BellNotification>("/notifications"),
+    () => api.getCollection<BellNotification>("/notifications?itemsPerPage=100"),
     [api],
   );
   const { data: notificationData, refresh: refreshNotifications } = useApiData(

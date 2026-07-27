@@ -12,7 +12,7 @@ use App\Enum\BoutiqueStatus;
 use App\Repository\BoutiqueRepository;
 use App\Security\BoutiqueContext;
 use App\Service\Boutique\ReservedSlugRegistry;
-use App\Service\NotificationService;
+use App\Service\Notification\BackofficeNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -25,7 +25,7 @@ final class BoutiqueProcessor implements ProcessorInterface
         private readonly BoutiqueRepository $repository,
         private readonly EntityManagerInterface $em,
         private readonly BoutiqueContext $context,
-        private readonly NotificationService $notifications,
+        private readonly BackofficeNotificationService $notifications,
         private readonly ReservedSlugRegistry $reservedSlugs,
     ) {
     }
@@ -96,7 +96,7 @@ final class BoutiqueProcessor implements ProcessorInterface
             $userShop->setStatus(\App\Enum\UserStatus::Active);
         }
 
-        $this->notifications->notify(null, 'boutique_approved', 'Boutique approuvée', sprintf('La boutique "%s" a été approuvée.', $entity->getName()), $entity);
+        $this->notifyAdmins($entity, 'boutique.approved', 'Boutique approuvée', sprintf('La boutique "%s" a été approuvée.', $entity->getName()));
     }
 
     private function rejectBoutique(Boutique $entity): void
@@ -107,40 +107,51 @@ final class BoutiqueProcessor implements ProcessorInterface
             $userShop->setStatus(\App\Enum\UserStatus::Rejected);
         }
 
-        $this->notifications->notify(null, 'boutique_rejected', 'Boutique rejetée', sprintf('La boutique "%s" a été rejetée.', $entity->getName()), $entity);
+        $this->notifyAdmins($entity, 'boutique.rejected', 'Boutique rejetée', sprintf('La boutique "%s" a été rejetée.', $entity->getName()));
     }
 
     private function suspendBoutique(Boutique $entity): void
     {
         $entity->suspend();
 
-        $this->notifications->notify(null, 'boutique_suspended', 'Boutique suspendue', sprintf('La boutique "%s" a été suspendue.', $entity->getName()), $entity);
+        $this->notifyAdmins($entity, 'boutique.suspended', 'Boutique suspendue', sprintf('La boutique "%s" a été suspendue.', $entity->getName()));
     }
 
     private function activateBoutique(Boutique $entity): void
     {
         $entity->reactivate();
 
-        $this->notifications->notify(null, 'boutique_activated', 'Boutique réactivée', sprintf('La boutique "%s" a été réactivée.', $entity->getName()), $entity);
+        $this->notifyAdmins($entity, 'boutique.activated', 'Boutique réactivée', sprintf('La boutique "%s" a été réactivée.', $entity->getName()));
     }
 
     private function archiveBoutique(Boutique $entity): void
     {
         $entity->archive();
 
-        $this->notifications->notify(null, 'boutique_archived', 'Boutique archivée', sprintf('La boutique "%s" a été archivée.', $entity->getName()), $entity);
+        $this->notifyAdmins($entity, 'boutique.archived', 'Boutique archivée', sprintf('La boutique "%s" a été archivée.', $entity->getName()));
     }
 
     private function publishBoutique(Boutique $entity): void
     {
         $entity->publish();
-        $this->notifications->notify(null, 'boutique_published', 'Boutique publiée', sprintf('La boutique "%s" est maintenant publique.', $entity->getName()), $entity);
+        $this->notifyAdmins($entity, 'boutique.published', 'Boutique publiée', sprintf('La boutique "%s" est maintenant publique.', $entity->getName()));
     }
 
     private function unpublishBoutique(Boutique $entity): void
     {
         $entity->unpublish();
-        $this->notifications->notify(null, 'boutique_unpublished', 'Boutique dépubliée', sprintf('La boutique "%s" n’est plus publique.', $entity->getName()), $entity);
+        $this->notifyAdmins($entity, 'boutique.unpublished', 'Boutique dépubliée', sprintf('La boutique "%s" n’est plus publique.', $entity->getName()));
+    }
+
+    private function notifyAdmins(Boutique $boutique, string $eventCode, string $title, string $message): void
+    {
+        $this->notifications->notifyBoutiqueAdmins(
+            $boutique,
+            str_replace('.', '_', $eventCode),
+            $title,
+            $message,
+            $eventCode,
+        );
     }
 
     private function applyInput(Boutique $entity, BoutiqueInput $input): void

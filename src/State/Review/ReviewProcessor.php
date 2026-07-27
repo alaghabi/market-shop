@@ -14,6 +14,7 @@ use App\Repository\OrderItemRepository;
 use App\Repository\OrderRepository;
 use App\Repository\ProductRepository;
 use App\Repository\ReviewRepository;
+use App\Security\BoutiqueContext;
 use App\Service\Module\ModuleAccessService;
 use App\Service\Security\PublicApiRateLimiter;
 use Doctrine\ORM\EntityManagerInterface;
@@ -33,6 +34,7 @@ final readonly class ReviewProcessor implements ProcessorInterface
         private OrderItemRepository $orderItems,
         private EntityManagerInterface $em,
         private Security $security,
+        private BoutiqueContext $boutiqueContext,
         private RequestStack $requestStack,
         private ModuleAccessService $moduleAccess,
         private PublicApiRateLimiter $rateLimiter,
@@ -47,6 +49,13 @@ final readonly class ReviewProcessor implements ProcessorInterface
             $review = $this->reviews->find((string) $reviewId);
             if (!$review instanceof Review) {
                 throw new NotFoundHttpException('Review not found');
+            }
+
+            if (!$this->security->isGranted('ROLE_SUPER_ADMIN')) {
+                $boutique = $review->getBoutique() ?? $review->getProduct()?->getBoutique();
+                if (null === $boutique || !$this->boutiqueContext->canAccessBoutique($boutique)) {
+                    throw new AccessDeniedHttpException('Review access denied');
+                }
             }
 
             $this->em->remove($review);

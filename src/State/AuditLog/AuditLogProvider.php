@@ -7,30 +7,41 @@ use App\Entity\AuditLog;
 use App\Repository\AuditLogRepository;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 
 final class AuditLogProvider implements ProviderInterface
 {
     public function __construct(
         private AuditLogRepository $logs,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): ?AuditLogOutput
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|AuditLogOutput|null
     {
+        if (!isset($uriVariables['id'])) {
+            $request = $context['request'] ?? null;
+            $request = $request instanceof Request ? $request : null;
+            $pagination = $this->scope->pagination($request);
+            $result = $this->logs->findForBackoffice(null, $pagination['page'], $pagination['itemsPerPage']);
+
+            return new BackofficePaginator(
+                array_map($this->toOutput(...), $result['items']),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+                $result['total'],
+            );
+        }
+
         $log = $this->logs->find($uriVariables['id'] ?? null);
         if (!$log instanceof AuditLog) {
             return null;
         }
 
         return $this->toOutput($log);
-    }
-
-    /** @return list<AuditLogOutput> */
-    public function getCollection(Operation $operation, array $uriVariables = [], array $context = []): array
-    {
-        $logs = $this->logs->findByBoutique(null);
-
-        return array_map($this->toOutput(...), $logs);
     }
 
     private function toOutput(AuditLog $log): AuditLogOutput

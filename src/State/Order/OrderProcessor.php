@@ -11,6 +11,7 @@ use App\Enum\PaymentStatus;
 use App\Repository\OrderRepository;
 use App\Security\BoutiqueContext;
 use App\Service\Loyalty\LoyaltyEngine;
+use App\Service\NotificationService;
 use App\Service\Webhook\WebhookService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -30,6 +31,7 @@ final readonly class OrderProcessor implements ProcessorInterface
         private WebhookService $webhookService,
         private LoyaltyEngine $loyaltyEngine,
         private BoutiqueContext $boutiqueContext,
+        private NotificationService $notifications,
     ) {
     }
 
@@ -111,6 +113,10 @@ final readonly class OrderProcessor implements ProcessorInterface
                 OrderStatus::Cancelled => $this->webhookService->dispatchEvent('order.cancelled', $payload, $boutiqueId),
                 default => null,
             };
+
+            if (OrderStatus::Paid === $order->getStatus() && OrderStatus::Paid !== $previousStatus) {
+                $this->notifications->dispatchOrderConfirmation($order);
+            }
 
             // Loyalty earn/reversal hooks — LoyaltyEngine is the only service allowed to compute these.
             match ($order->getStatus()) {

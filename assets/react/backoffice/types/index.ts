@@ -68,9 +68,20 @@ export type Product = {
   isActive?: boolean;
   isFeatured: boolean;
   viewsCount?: number;
-  images?: string[];
-  filterValues?: Array<{ filterName: string; value: string }>;
-  createdAt: string;
+  images?: Array<string | { url?: string | null; smallUrl?: string | null; largeUrl?: string | null; alt?: string | null; isDefault?: boolean }>;
+  variants?: Array<{
+    id?: string;
+    sku?: string | null;
+    sellingPrice?: number;
+    comparePrice?: number;
+    quantity?: number;
+    image?: string | null;
+    isDefault?: boolean;
+    isActive?: boolean;
+    attributes?: Array<{ name: string; value: string }>;
+  }>;
+  filterValues?: Array<{ filterId: string; filterName: string; filterSlug?: string; value: string }>;
+  createdAt?: string;
   updatedAt: string;
 };
 
@@ -83,6 +94,9 @@ export type Category = {
   isFeatured: boolean;
   productsCount: number;
   children: Category[];
+  parentId?: string | null;
+  image?: string | null;
+  banner?: string | null;
   createdAt: string;
 };
 
@@ -114,6 +128,7 @@ export type Order = {
   items?: Array<{
     productId?: string | null;
     productName?: string | null;
+    productImage?: string | null;
     sku?: string;
     quantity: number;
     unitPriceCents: number;
@@ -141,6 +156,7 @@ export type Customer = {
   firstName?: string;
   lastName?: string;
   phone?: string;
+  active?: boolean;
   ordersCount?: number;
   totalSpentCents?: number;
   createdAt: string;
@@ -217,7 +233,7 @@ export type SubscriptionSummary = {
   endDate: string | null;
   daysRemaining: number | null;
   quotas: QuotaInfo[];
-  accessibleModules: string[];
+  accessibleModules: string[] | Record<string, string>;
   activeExtensions: Array<{ extensionCode: string; extensionName: string; type: string }>;
 };
 

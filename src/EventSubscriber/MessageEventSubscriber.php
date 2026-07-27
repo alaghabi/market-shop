@@ -68,6 +68,7 @@ final class MessageEventSubscriber implements EventSubscriberInterface
             conversationId: (string) $conversation->getId(),
             boutiqueId: (string) $boutique->getId(),
             userMessage: $message->getContent(),
+            userMessageId: (string) $message->getId(),
         ));
     }
 }

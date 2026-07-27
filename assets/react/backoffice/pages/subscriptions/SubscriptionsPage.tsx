@@ -13,6 +13,7 @@ import { useBoutique } from '../../hooks/useBoutique';
 import { BoutiqueFormSelect, resolveFormBoutiqueId } from '../../components/BoutiqueFormSelect';
 import { ExtensionsBoutiquePanel } from './ExtensionsBoutiquePanel';
 import { ExtensionsAdminPanel } from './ExtensionsAdminPanel';
+import { Pagination } from '../../components/Pagination';
 
 type SubscriptionPlan = {
   id: string;
@@ -62,12 +63,15 @@ const emptyForm: SubscriptionPlanForm = {
   modules: [],
 };
 
+const PAGE_SIZE = 20;
+
 export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAccessToken: () => string | null; userRoles?: string[] }) {
   const api = useApiClient(getAccessToken);
   const { showNotice } = useNotification();
   const { boutique } = useBoutique();
   const isSuperAdmin = userRoles.includes('ROLE_SUPER_ADMIN');
   const [tab, setTab] = useState<'plans' | 'extensions'>('plans');
+  const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<SubscriptionPlan | null>(null);
   const [form, setForm] = useState<SubscriptionPlanForm>(emptyForm);
@@ -96,22 +100,29 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
   const [savingSubscriptionRequest, setSavingSubscriptionRequest] = useState(false);
 
   const fetchPlans = useCallback(
-    () => api.getCollection<SubscriptionPlan>(isSuperAdmin ? '/admin/subscription-plans' : '/boutique/subscription-plans'),
+    () => api.getCollection<SubscriptionPlan>(`${isSuperAdmin ? '/admin/subscription-plans' : '/boutique/subscription-plans'}?page=${page}&itemsPerPage=${PAGE_SIZE}`),
+    [api, isSuperAdmin, page],
+  );
+  const fetchPlanOptions = useCallback(
+    () => api.getCollection<SubscriptionPlan>(`${isSuperAdmin ? '/admin/subscription-plans' : '/boutique/subscription-plans'}?itemsPerPage=100`),
     [api, isSuperAdmin],
   );
   const fetchSub = useCallback(() => api.get<{ member: Subscription[] }>('/subscriptions').catch(() => ({ member: [] })), [api]);
   const fetchModules = useCallback(
-    () => isSuperAdmin ? api.getCollection<ModuleOption>('/admin/platform-modules') : Promise.resolve({ member: [], totalItems: 0 }),
+    () => isSuperAdmin ? api.getCollection<ModuleOption>('/admin/platform-modules?itemsPerPage=100') : Promise.resolve({ member: [], totalItems: 0 }),
     [api, isSuperAdmin],
   );
 
-  const { data: plans, isLoading: plansLoading, error: plansError, refresh: refreshPlans } = useApiData(fetchPlans, []);
+  const { data: plans, isLoading: plansLoading, error: plansError, refresh: refreshPlans } = useApiData(fetchPlans, [page]);
+  const { data: planOptionsData } = useApiData(fetchPlanOptions, [isSuperAdmin]);
   const { data: subsData } = useApiData(fetchSub, []);
   const { data: modulesData, isLoading: modulesLoading } = useApiData(fetchModules, [isSuperAdmin]);
 
   const plansList = plans?.member ?? [];
+  const planOptions = planOptionsData?.member ?? plansList;
   const subscriptions = subsData?.member ?? [];
   const moduleOptions = modulesData?.member ?? [];
+  const totalPages = Math.max(1, Math.ceil((plans?.totalItems ?? 0) / PAGE_SIZE));
   const moduleNames = new Map(moduleOptions.map((module) => [module.moduleCode, module.moduleName]));
 
   const openCreate = () => {
@@ -188,6 +199,25 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
       refreshPlans();
     } catch (error) {
       showNotice(error instanceof Error ? error.message : 'Erreur lors de la mise à jour', 'error');
+    }
+  };
+
+  const duplicatePlan = async (plan: SubscriptionPlan) => {
+    try {
+      await api.post('/admin/subscription-plans', {
+        name: `${plan.name} (copie)`,
+        description: plan.description ?? null,
+        durationMonths: plan.durationMonths,
+        priceTnd: plan.priceTnd,
+        isFree: plan.isFree,
+        isVisible: plan.isVisible,
+        isActive: false,
+        modules: plan.modules ?? [],
+      });
+      showNotice('Plan dupliqué en brouillon inactif.', 'success');
+      refreshPlans();
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : 'Erreur lors de la duplication', 'error');
     }
   };
 
@@ -279,7 +309,7 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
         <CardBody>
           {plansLoading ? <LoadingState /> : plansError ? <ErrorState message={plansError} onRetry={refreshPlans} /> : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
-              {plansList.map((plan) => (
+               {plansList.map((plan) => (
                 <div key={plan.id} className="bo-card" style={{ padding: 24, border: '1px solid var(--bo-border)', borderRadius: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                     <div>
@@ -287,7 +317,7 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
                       {plan.description && <p style={{ fontSize: 14, color: 'var(--bo-text-secondary)', margin: '0 0 16px' }}>{plan.description}</p>}
                     </div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                      <Badge tone={plan.isActive ? 'success' : 'neutral'}>{plan.isActive ? 'Actif' : 'Inactif'}</Badge>
+                       <Badge tone={plan.isActive ? 'success' : 'error'}>{plan.isActive ? 'Actif' : 'Inactif'}</Badge>
                       <Badge tone={plan.isVisible ? 'success' : 'warning'}>{plan.isVisible ? 'Publié' : 'Masqué'}</Badge>
                     </div>
                   </div>
@@ -303,6 +333,7 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
                   {isSuperAdmin ? (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
                       <Button variant="secondary" size="sm" onClick={() => openEdit(plan)}>Modifier</Button>
+                      <Button variant="secondary" size="sm" onClick={() => duplicatePlan(plan)}>Dupliquer</Button>
                       <Button variant="ghost" size="sm" onClick={() => updatePlan(plan, { isActive: !plan.isActive })}>{plan.isActive ? 'Désactiver' : 'Activer'}</Button>
                       <Button variant="ghost" size="sm" onClick={() => updatePlan(plan, { isVisible: !plan.isVisible })}>{plan.isVisible ? 'Dépublier' : 'Publier'}</Button>
                       <Button variant="danger" size="sm" onClick={() => setDeleteId(plan.id)}>Supprimer</Button>
@@ -313,8 +344,9 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
+               ))}
+               <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+             </div>
           )}
         </CardBody>
       </Card>
@@ -479,7 +511,7 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
           <FormField label="Nouveau plan" required>
             <Select required value={subscriptionPlanId} onChange={(event) => setSubscriptionPlanId(event.target.value)}>
               <option value="">Sélectionner un plan</option>
-              {plansList.filter((plan) => plan.isActive && plan.isVisible).map((plan) => (
+               {planOptions.filter((plan) => plan.isActive && plan.isVisible).map((plan) => (
                 <option key={plan.id} value={plan.id}>{plan.name} - {plan.isFree ? 'Gratuit' : `${plan.priceTnd} TND`}</option>
               ))}
             </Select>

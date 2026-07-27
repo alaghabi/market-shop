@@ -6,6 +6,7 @@ import { Badge } from '../../components/Badge';
 import { LoadingState, ErrorState } from '../../components/States';
 import { PageHeader } from '../../layout/Shell';
 import { Modal } from '../../components/Modal';
+import { useBoutique } from '../../hooks/useBoutique';
 
 type PlatformData = {
   kpis: {
@@ -20,6 +21,16 @@ type PlatformData = {
 
 type AppConfig = {
   modules: Record<string, boolean>;
+};
+
+type BoutiqueDashboardData = {
+  kpis: {
+    salesMonthCents: number;
+    ordersToday: number;
+    ordersTotal: number;
+    customersTotal: number;
+    productsTotal: number;
+  };
 };
 
 const MODULE_INFO: Record<string, { label: string; icon: string; color: string; section: string }> = {
@@ -69,7 +80,40 @@ function StatBox({ label, value }: { label: string; value: string | number }) {
 
 export function StatistiquesPage({ getAccessToken }: { getAccessToken: () => string | null }) {
   const api = useApiClient(getAccessToken);
-  const fetchPlatform = useCallback(() => api.get<PlatformData>('/admin/dashboard/platform'), [api]);
+  const { boutique } = useBoutique();
+  const fetchPlatform = useCallback(async (): Promise<PlatformData> => {
+    if (!boutique) {
+      return api.get<PlatformData>('/admin/dashboard/platform');
+    }
+
+    const dashboard = await api.get<BoutiqueDashboardData>(`/admin/boutiques/${boutique.id}/dashboard`);
+    const status = boutique.status.toUpperCase();
+    const kpis = dashboard.kpis;
+
+    return {
+      kpis: {
+        totalBoutiques: 1,
+        activeBoutiques: status === 'ACTIVE' ? 1 : 0,
+        pendingBoutiques: status === 'PENDING' ? 1 : 0,
+        newBoutiques: 0,
+        totalCustomers: kpis.customersTotal,
+        totalProducts: kpis.productsTotal,
+        totalOrders: kpis.ordersTotal,
+        ordersToday: kpis.ordersToday,
+        platformRevenueCents: kpis.salesMonthCents,
+        monthlyGrowthPercent: null,
+        totalBoutiqueAdmins: 0,
+        totalEmployees: 0,
+      },
+      subscriptions: { active: 0, expired: 0, expiringSoon: 0 },
+      topBoutiques: [{
+        id: boutique.id,
+        name: boutique.name,
+        revenueCents: kpis.salesMonthCents,
+        orders: kpis.ordersTotal,
+      }],
+    };
+  }, [api, boutique]);
   const fetchConfig = useCallback(() => api.get<AppConfig>('/admin/dashboard/modules'), [api]);
 
   const { data: plat, isLoading, error, refresh } = useApiData(fetchPlatform);
@@ -101,7 +145,7 @@ export function StatistiquesPage({ getAccessToken }: { getAccessToken: () => str
     <div className="bo-page">
       <PageHeader
         title="Statistiques"
-        description="Indicateurs clés de la plateforme"
+        description={boutique ? `Indicateurs clés de ${boutique.name}` : 'Indicateurs clés de la plateforme'}
         actions={
           <Button variant="primary" onClick={() => setShowModulesModal(true)}>Modules</Button>
         }

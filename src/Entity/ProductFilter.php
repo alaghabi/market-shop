@@ -68,6 +68,11 @@ class ProductFilter extends AbstractEntity
         return $this->type;
     }
 
+    public function setType(string $type): void
+    {
+        $this->type = $type;
+    }
+
     public function getPosition(): int
     {
         return $this->position;
@@ -98,5 +103,10 @@ class ProductFilter extends AbstractEntity
         if (!$this->values->contains($value)) {
             $this->values->add($value);
         }
+    }
+
+    public function removeValue(ProductFilterValue $value): void
+    {
+        $this->values->removeElement($value);
     }
 }

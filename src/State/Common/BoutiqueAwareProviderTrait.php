@@ -42,7 +42,9 @@ trait BoutiqueAwareProviderTrait
             return $this->canUseResolvedBoutique($boutique, Uuid::isValid($boutiqueId)) ? $boutique : null;
         }
 
-        if (isset($this->context) && $this->context instanceof BoutiqueContext) {
+        // A super admin without an explicit selection means "all boutiques".
+        // Only boutique-scoped users receive their default boutique here.
+        if (isset($this->context) && $this->context instanceof BoutiqueContext && !$this->context->isSuperAdmin()) {
             $boutiqueId = $this->context->getBoutiqueId();
             if (null !== $boutiqueId && isset($this->boutiques) && $this->boutiques instanceof BoutiqueRepository) {
                 return $this->boutiques->find((string) $boutiqueId);

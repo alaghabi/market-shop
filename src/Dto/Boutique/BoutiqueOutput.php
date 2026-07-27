@@ -44,6 +44,7 @@ final class BoutiqueOutput
     public bool $analyticsEnabled = false;
     public bool $viewsEnabled = false;
     public bool $customerAccountsEnabled = true;
+    public bool $chatbotEnabled = false;
     public int $customersWithAccount = 0;
     public int $customersWithoutAccount = 0;
     public int $publicOrdersCount = 0;

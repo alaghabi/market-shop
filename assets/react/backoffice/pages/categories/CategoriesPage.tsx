@@ -15,6 +15,7 @@ import { PageHeader } from '../../layout/Shell';
 import { useNotification } from '../../hooks/useNotification';
 import { useBoutique } from '../../hooks/useBoutique';
 import { BoutiqueFormSelect, resolveFormBoutiqueId } from '../../components/BoutiqueFormSelect';
+import { MediaField } from '../../components/MediaField';
 
 const PAGE_SIZE = 20;
 
@@ -34,7 +35,7 @@ export function CategoriesPage({ getAccessToken }: { getAccessToken: () => strin
   const [editing, setEditing] = useState<Category | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [form, setForm] = useState({ boutiqueId: '', name: '', parentId: '', isActive: true });
+  const [form, setForm] = useState({ boutiqueId: '', name: '', parentId: '', image: '', banner: '', isActive: true });
 
   const fetchData = useCallback(async () => {
     const params = new URLSearchParams();
@@ -55,6 +56,7 @@ export function CategoriesPage({ getAccessToken }: { getAccessToken: () => strin
   const fetchAllCats = useCallback(() => {
     const params = new URLSearchParams();
     if (!boutique?.id && form.boutiqueId) params.set('boutiqueId', form.boutiqueId);
+    params.set('itemsPerPage', '100');
 
     return api.getCollection<Category>('/categories' + (params.size ? '?' + params.toString() : ''));
   }, [api, boutique?.id, form.boutiqueId]);
@@ -67,13 +69,13 @@ export function CategoriesPage({ getAccessToken }: { getAccessToken: () => strin
 
   function openCreate() {
     setEditing(null);
-    setForm({ boutiqueId: '', name: '', parentId: '', isActive: !atQuota });
+    setForm({ boutiqueId: '', name: '', parentId: '', image: '', banner: '', isActive: !atQuota });
     setModalOpen(true);
   }
 
   function openEdit(cat: Category) {
     setEditing(cat);
-    setForm({ boutiqueId: cat.boutiqueId ?? '', name: cat.name, parentId: '', isActive: cat.isActive });
+    setForm({ boutiqueId: cat.boutiqueId ?? '', name: cat.name, parentId: '', image: cat.image ?? '', banner: cat.banner ?? '', isActive: cat.isActive });
     setModalOpen(true);
   }
 
@@ -86,7 +88,7 @@ export function CategoriesPage({ getAccessToken }: { getAccessToken: () => strin
     }
     setSubmitting(true);
     try {
-      const body = { boutiqueId, name: form.name, slug: slugify(form.name), parentId: form.parentId || null, isActive: form.isActive };
+      const body = { boutiqueId, name: form.name, slug: slugify(form.name), parentId: form.parentId || null, image: form.image || null, banner: form.banner || null, isActive: form.isActive };
       if (editing) {
         await api.patch('/categories/' + editing.id, body);
         showNotice('Catégorie mise à jour.', 'success');
@@ -121,7 +123,7 @@ export function CategoriesPage({ getAccessToken }: { getAccessToken: () => strin
   }
 
   const columns = [
-    { key: 'name', label: 'Nom', sortable: true, render: (c: Category) => <strong>{c.name}</strong> },
+    { key: 'name', label: 'Nom', sortable: true, render: (c: Category) => <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{c.image ? <img src={c.image} alt="" style={{ width: 38, height: 38, borderRadius: 8, objectFit: 'cover' }} /> : <div style={{ width: 38, height: 38, borderRadius: 8, background: 'var(--bo-border)' }} />}<strong>{c.name}</strong></div> },
     { key: 'slug', label: 'Slug', render: (c: Category) => <code style={{ fontSize: 12 }}>{c.slug}</code> },
     { key: 'productsCount', label: 'Produits', render: (c: Category) => <Badge tone="neutral">{c.productsCount ?? 0}</Badge> },
     { key: 'isActive', label: 'Statut', render: (c: Category) => <Badge tone={c.isActive ? 'success' : 'neutral'}>{c.isActive ? 'Actif' : 'Inactif'}</Badge> },
@@ -156,7 +158,7 @@ export function CategoriesPage({ getAccessToken }: { getAccessToken: () => strin
             <EmptyState title="Aucune catégorie" message="Créez votre première catégorie." action={{ label: '+ Nouvelle catégorie', onClick: openCreate }} />
           ) : (
             <>
-              <Table columns={columns} data={categories} onRowClick={openEdit} />
+              <Table columns={columns} data={categories} onRowClick={openEdit} renderActions={(category) => <Button size="sm" variant="danger" onClick={(event) => { event.stopPropagation(); setDeleteTarget(category); }}>Supprimer</Button>} />
               <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </>
           )}
@@ -169,6 +171,8 @@ export function CategoriesPage({ getAccessToken }: { getAccessToken: () => strin
         <form className="bo-form" onSubmit={handleSubmit}>
           <BoutiqueFormSelect value={form.boutiqueId} onChange={(boutiqueId) => setForm((f) => ({ ...f, boutiqueId, parentId: '' }))} />
           <FormField label="Nom" required><Input required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></FormField>
+          <MediaField label="Image de la catégorie" value={form.image} boutiqueId={boutique?.id ?? form.boutiqueId} context="categories" onChange={(image) => setForm((f) => ({ ...f, image }))} />
+          <MediaField label="Bannière de la catégorie" value={form.banner} boutiqueId={boutique?.id ?? form.boutiqueId} context="categories" maxSizeMb={10} onChange={(banner) => setForm((f) => ({ ...f, banner }))} />
           <FormField label="Catégorie parente">
             <Select value={form.parentId} onChange={(e) => setForm((f) => ({ ...f, parentId: e.target.value }))}>
               <option value="">Aucune (racine)</option>

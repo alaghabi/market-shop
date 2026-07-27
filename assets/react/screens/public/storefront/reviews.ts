@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { boutiqueQuery } from '../boutiqueRouting';
 
 export type StoreReview = {
   id: string;
@@ -17,7 +18,7 @@ type CollectionPayload = StoreReview[] | {
   'hydra:member'?: StoreReview[];
 };
 
-export function useStorefrontReviews(enabled = true) {
+export function useStorefrontReviews(enabled = true, boutiqueSlug = '') {
   const [reviews, setReviews] = useState<StoreReview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -30,7 +31,7 @@ export function useStorefrontReviews(enabled = true) {
 
     const controller = new AbortController();
 
-    fetch('/api/reviews', { signal: controller.signal })
+    fetch(`/api/reviews${boutiqueQuery(boutiqueSlug)}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error('Impossible de charger les avis de la boutique.');
 
@@ -48,7 +49,7 @@ export function useStorefrontReviews(enabled = true) {
       });
 
     return () => controller.abort();
-  }, [enabled]);
+  }, [enabled, boutiqueSlug]);
 
   return { reviews, isLoading };
 }

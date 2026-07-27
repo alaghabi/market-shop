@@ -3,23 +3,30 @@ import type { Customer, SubscriptionSummary } from '../../types';
 import { useApiClient, useApiData } from '../../hooks/useApi';
 import { Card, CardHeader, CardBody } from '../../components/Card';
 import { Badge } from '../../components/Badge';
+import { Button } from '../../components/Button';
 import { Table } from '../../components/Table';
 import { Pagination } from '../../components/Pagination';
 import { Modal } from '../../components/Modal';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { FormField } from '../../components/FormField';
 import { FiltersBar } from '../../components/FiltersBar';
 import { LoadingState, EmptyState, ErrorState } from '../../components/States';
 import { PageHeader } from '../../layout/Shell';
 import { useBoutique } from '../../hooks/useBoutique';
+import { useNotification } from '../../hooks/useNotification';
 
 const PAGE_SIZE = 20;
 
-export function CustomersPage({ getAccessToken }: { getAccessToken: () => string | null }) {
+export function CustomersPage({ getAccessToken, userRoles = [] }: { getAccessToken: () => string | null; userRoles?: string[] }) {
   const api = useApiClient(getAccessToken);
+  const { showNotice } = useNotification();
   const { boutique } = useBoutique();
+  const canManageCustomers = userRoles.includes('ROLE_SUPER_ADMIN') || userRoles.includes('ROLE_BOUTIQUE_ADMIN');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     const params = new URLSearchParams();
@@ -35,6 +42,35 @@ export function CustomersPage({ getAccessToken }: { getAccessToken: () => string
   const customers = data?.member ?? [];
   const totalItems = data?.totalItems ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+
+  async function updateCustomer(customer: Customer, active: boolean) {
+    setProcessingId(customer.id);
+    try {
+      await api.patch(`/customers/${customer.id}`, { active });
+      showNotice(active ? 'Client activé.' : 'Client désactivé.', 'success');
+      refresh();
+    } catch (err) {
+      showNotice(err instanceof Error ? err.message : 'Erreur lors de la mise à jour du client.', 'error');
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  async function deleteCustomer() {
+    if (!deleteTarget) return;
+    setProcessingId(deleteTarget.id);
+    try {
+      await api.delete(`/customers/${deleteTarget.id}`);
+      showNotice('Client supprimé.', 'success');
+      setDeleteTarget(null);
+      setDetailCustomer(null);
+      refresh();
+    } catch (err) {
+      showNotice(err instanceof Error ? err.message : 'Erreur lors de la suppression du client.', 'error');
+    } finally {
+      setProcessingId(null);
+    }
+  }
 
   const columns = [
     {
@@ -52,7 +88,8 @@ export function CustomersPage({ getAccessToken }: { getAccessToken: () => string
       key: 'totalSpentCents', label: 'Total dépensé',
       render: (c: Customer) => <strong>{((c.totalSpentCents ?? 0) / 100).toFixed(2)} TND</strong>,
     },
-    { key: 'createdAt', label: 'Inscrit le', render: (c: Customer) => <span style={{ fontSize: 13, color: 'var(--bo-text-secondary)' }}>{new Date(c.createdAt).toLocaleDateString('fr-FR')}</span> },
+    { key: 'active', label: 'Statut', render: (c: Customer) => <Badge tone={c.active === false ? 'error' : 'success'}>{c.active === false ? 'Inactif' : 'Actif'}</Badge> },
+    { key: 'createdAt', label: 'Inscrit le', render: (c: Customer) => <span style={{ fontSize: 13, color: 'var(--bo-text-secondary)' }}>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('fr-FR') : '—'}</span> },
   ];
 
   if (error) return <ErrorState message={error} onRetry={refresh} />;
@@ -83,7 +120,10 @@ export function CustomersPage({ getAccessToken }: { getAccessToken: () => string
           {isLoading ? <LoadingState /> : customers.length === 0 ? (
             <EmptyState title="Aucun client" message="Les clients apparaîtront ici." />
           ) : (
-            <><Table columns={columns} data={customers} onRowClick={setDetailCustomer} /><Pagination page={page} totalPages={totalPages} onPageChange={setPage} /></>
+            <><Table columns={columns} data={customers} onRowClick={setDetailCustomer} renderActions={canManageCustomers ? (customer) => <div style={{ display: 'flex', gap: 4 }}>
+              <Button size="sm" variant={customer.active === false ? 'secondary' : 'ghost'} disabled={processingId === customer.id} onClick={(event) => { event.stopPropagation(); updateCustomer(customer, customer.active === false); }}>{customer.active === false ? 'Activer' : 'Désactiver'}</Button>
+              <Button size="sm" variant="danger" disabled={processingId === customer.id} onClick={(event) => { event.stopPropagation(); setDeleteTarget(customer); }}>Supprimer</Button>
+            </div> : undefined} /><Pagination page={page} totalPages={totalPages} onPageChange={setPage} /></>
           )}
         </CardBody>
       </Card>
@@ -100,6 +140,7 @@ export function CustomersPage({ getAccessToken }: { getAccessToken: () => string
           </div>
         )}
       </Modal>
+      <ConfirmDialog isOpen={!!deleteTarget} onClose={() => { if (!processingId) setDeleteTarget(null); }} onConfirm={deleteCustomer} title="Supprimer le client" message={deleteTarget ? `Supprimer définitivement ${deleteTarget.email} ?` : ''} confirmLabel="Supprimer" danger isLoading={!!processingId} />
     </div>
   );
 }

@@ -1,6 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Badge, Button, Card } from '../../components/ui';
+import { authHeaders, resolveBoutiqueSlug } from './boutiqueRouting';
+import { applyStorefrontTheme, resetStorefrontTheme, type StorefrontThemeData } from '../../theme/storefrontThemeRoot';
 
 type LastOrderSummary = {
   orderId: string;
@@ -12,6 +14,26 @@ type LastOrderSummary = {
 
 export function OrderConfirmationPage() {
   const orderId = useMemo(() => new URLSearchParams(window.location.search).get('orderId') || '', []);
+  const boutiqueSlug = useMemo(() => resolveBoutiqueSlug(/^\/boutiques\/([^/]+)\/order-confirmation/), []);
+
+  useEffect(() => {
+    if (!boutiqueSlug) return undefined;
+
+    let cancelled = false;
+    resetStorefrontTheme();
+    fetch(`/api/boutiques/${encodeURIComponent(boutiqueSlug)}`, { headers: authHeaders() })
+      .then((response) => response.ok ? response.json() as Promise<StorefrontThemeData> : null)
+      .then((payload) => {
+        if (!cancelled && payload) applyStorefrontTheme(payload);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      resetStorefrontTheme();
+    };
+  }, [boutiqueSlug]);
+
   const summary = useMemo(() => {
     try {
       const raw = window.sessionStorage.getItem('market-shop:last-order');
@@ -42,9 +64,10 @@ export function OrderConfirmationPage() {
           <h1 className="ds-hero__title mt-4">Commande confirmée</h1>
           <p className="ds-hero__subtitle mx-auto">Votre commande a bien été créée. Vous pouvez garder ce numéro pour le suivi.</p>
           <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-[color:var(--ds-outline-variant)] bg-white p-6 text-left">
-            <p className="text-sm text-[color:var(--ds-on-surface-variant)]">N° commande</p>
-            <strong className="text-2xl">{displayedOrderId ? `#${displayedOrderId}` : 'Commande créée'}</strong>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
+             <p className="text-sm text-[color:var(--ds-on-surface-variant)]">N° commande</p>
+             <strong className="text-2xl">{displayedOrderId ? `#${displayedOrderId}` : 'Commande créée'}</strong>
+             <p className="mt-2 text-sm font-semibold text-red-600">Si vous le souhaitez, sauvegardez ce lien pour consulter le statut de cette commande.</p>
+             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div>
                 <p className="text-sm text-[color:var(--ds-on-surface-variant)]">Statut</p>
                 <strong>{summary?.status || 'pending'}</strong>
@@ -73,7 +96,7 @@ export function OrderConfirmationPage() {
             </div>
           </div>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Button variant="primary" onClick={() => { window.location.href = '/'; }}>Retour à la boutique</Button>
+             <Button variant="primary" style={{ backgroundColor: 'var(--ds-primary)' }} onClick={() => { window.location.href = '/'; }}>Retour à la boutique</Button>
             <Button variant="secondary" onClick={() => { window.history.back(); }}>Retour</Button>
           </div>
         </Card>

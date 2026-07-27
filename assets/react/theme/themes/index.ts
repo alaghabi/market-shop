@@ -1,5 +1,6 @@
 import { hanootiGlassTheme } from './hanooti-glass';
 import { hanootiMarketplaceTheme } from './hanooti-marketplace';
+import { noirAtelierTheme } from './noir-atelier';
 import { nordicEditorialTheme } from './nordic-editorial';
 import { oceanMinimalTheme } from './ocean-minimal';
 import type { StorefrontThemePreset } from './types';
@@ -9,6 +10,7 @@ export type { StorefrontThemePreset } from './types';
 export const STOREFRONT_THEME_PRESETS: StorefrontThemePreset[] = [
   hanootiGlassTheme,
   hanootiMarketplaceTheme,
+  noirAtelierTheme,
   nordicEditorialTheme,
   oceanMinimalTheme,
 ];

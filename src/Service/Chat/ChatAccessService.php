@@ -3,8 +3,8 @@
 namespace App\Service\Chat;
 
 use App\Entity\Conversation;
-use App\Entity\User;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
 
 final readonly class ChatAccessService
 {
@@ -17,16 +17,16 @@ final readonly class ChatAccessService
     {
         $user = $this->getCurrentUser();
 
-        if ($user instanceof User) {
-            if ($this->isSuperAdmin($user)) {
+        if ($user instanceof UserInterface) {
+            if ($this->hasRole($user, 'ROLE_SUPER_ADMIN')) {
                 return true;
             }
 
-            if ($this->isBoutiqueAdmin($user) && $user->getAdministeredBoutiques()->contains($conversation->getBoutique())) {
+            if ($user instanceof \App\Entity\User && $this->hasRole($user, 'ROLE_BOUTIQUE_ADMIN') && $user->getAdministeredBoutiques()->contains($conversation->getBoutique())) {
                 return true;
             }
 
-            if ((string) $conversation->getUser()?->getId() === (string) $user->getId()) {
+            if ($user instanceof \App\Entity\User && (string) $conversation->getUser()?->getId() === (string) $user->getId()) {
                 return true;
             }
         }
@@ -38,21 +38,21 @@ final readonly class ChatAccessService
     {
         $user = $this->getCurrentUser();
 
-        return $user instanceof User && ($this->isSuperAdmin($user) || $this->isBoutiqueAdmin($user));
+        return $user instanceof UserInterface && ($this->hasRole($user, 'ROLE_SUPER_ADMIN') || $this->hasRole($user, 'ROLE_BOUTIQUE_ADMIN'));
     }
 
     public function canManageAllConversations(): bool
     {
         $user = $this->getCurrentUser();
 
-        return $user instanceof User && $this->isSuperAdmin($user);
+        return $user instanceof UserInterface && $this->hasRole($user, 'ROLE_SUPER_ADMIN');
     }
 
     public function getAdministeredBoutiques(): array
     {
         $user = $this->getCurrentUser();
 
-        if (!$user instanceof User || (!$this->isSuperAdmin($user) && !$this->isBoutiqueAdmin($user))) {
+        if (!$user instanceof \App\Entity\User || (!$this->hasRole($user, 'ROLE_SUPER_ADMIN') && !$this->hasRole($user, 'ROLE_BOUTIQUE_ADMIN'))) {
             return [];
         }
 
@@ -64,13 +64,8 @@ final readonly class ChatAccessService
         return $this->tokenStorage->getToken()?->getUser();
     }
 
-    private function isSuperAdmin(User $user): bool
+    private function hasRole(UserInterface $user, string $role): bool
     {
-        return in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true);
-    }
-
-    private function isBoutiqueAdmin(User $user): bool
-    {
-        return in_array('ROLE_BOUTIQUE_ADMIN', $user->getRoles(), true);
+        return in_array($role, $user->getRoles(), true);
     }
 }

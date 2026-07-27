@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useApiClient, useApiData } from '../../hooks/useApi';
 import { useBoutique } from '../../hooks/useBoutique';
 import { useNotification } from '../../hooks/useNotification';
@@ -7,6 +7,7 @@ import { Card, CardBody } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { Badge } from '../../components/Badge';
 import { LoadingState, EmptyState, ErrorState } from '../../components/States';
+import { Pagination } from '../../components/Pagination';
 
 type PlatformModule = {
   id: string | null;
@@ -29,18 +30,20 @@ export function ModulesPage({ getAccessToken }: { getAccessToken: () => string |
   const api = useApiClient(getAccessToken);
   const { boutique } = useBoutique();
   const { showNotice } = useNotification();
+  const [page, setPage] = useState(1);
 
   const fetchModules = useCallback(async () => {
-    const platform = await api.getCollection<PlatformModule>('/admin/platform-modules');
+    const platform = await api.getCollection<PlatformModule>(`/admin/platform-modules?page=${page}&itemsPerPage=20`);
     const shop = boutique?.id
-      ? await api.getCollection<ShopModule>(`/boutiques/${boutique.id}/modules`)
+      ? await api.getCollection<ShopModule>(`/boutiques/${boutique.id}/modules?itemsPerPage=100`)
       : { member: [], totalItems: 0 };
 
-    return { platform: platform.member, shop: shop.member };
-  }, [api, boutique?.id]);
+    return { platform: platform.member, platformTotalItems: platform.totalItems, shop: shop.member };
+  }, [api, boutique?.id, page]);
 
-  const { data, isLoading, error, refresh } = useApiData(fetchModules, [boutique?.id]);
+  const { data, isLoading, error, refresh } = useApiData(fetchModules, [boutique?.id, page]);
   const shopByCode = new Map((data?.shop ?? []).map((module) => [module.moduleCode, module]));
+  const totalPages = Math.max(1, Math.ceil((data?.platformTotalItems ?? 0) / 20));
 
   const togglePlatform = async (module: PlatformModule) => {
     try {
@@ -86,7 +89,7 @@ export function ModulesPage({ getAccessToken }: { getAccessToken: () => string |
             <EmptyState title="Aucun module" message="Les modules disponibles apparaîtront ici." />
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
-              {data.platform.map((module) => {
+               {data.platform.map((module) => {
                 const shopModule = shopByCode.get(module.moduleCode);
                 const shopEnabled = shopModule?.isEnabled ?? true;
                 return (
@@ -112,8 +115,9 @@ export function ModulesPage({ getAccessToken }: { getAccessToken: () => string |
                     </div>
                   </div>
                 );
-              })}
-            </div>
+               })}
+               <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+             </div>
           )}
         </CardBody>
       </Card>

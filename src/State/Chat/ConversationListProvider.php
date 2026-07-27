@@ -7,7 +7,10 @@ use ApiPlatform\State\ProviderInterface;
 use App\ApiResource\Chat\ConversationListResource;
 use App\Entity\Conversation;
 use App\Repository\ConversationRepository;
-use App\Service\Chat\ChatAccessService;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
+use ApiPlatform\State\Pagination\PaginatorInterface;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
 /** @implements ProviderInterface<ConversationListResource> */
@@ -16,33 +19,35 @@ final class ConversationListProvider implements ProviderInterface
     public function __construct(
         private ConversationRepository $repository,
         private TokenStorageInterface $tokenStorage,
-        private ChatAccessService $access,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface
     {
         $token = $this->tokenStorage->getToken();
         $user = $token?->getUser();
 
         if (null === $user || !is_object($user)) {
-            return [];
+            return new BackofficePaginator([], 1, 20, 0);
         }
 
-        $qb = $this->repository->createQueryBuilder('c')
-            ->addSelect('b')
-            ->leftJoin('c.boutique', 'b')
-            ->orderBy('c.updatedAt', 'DESC')
-            ->addOrderBy('c.createdAt', 'DESC');
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
+        $result = $this->repository->findForBackoffice(
+            $this->scope->resolve($request),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
+        $conversations = $result['items'];
 
-        if (!$this->access->canManageAllConversations()) {
-            $qb->andWhere('b IN (:boutiques)')
-                ->setParameter('boutiques', $this->access->getAdministeredBoutiques());
-        }
-
-        $conversations = $qb->getQuery()->getResult();
-
-        return array_map(fn (Conversation $c) => $this->mapSingle($c), $conversations);
+        return new BackofficePaginator(
+            array_map(fn (Conversation $c) => $this->mapSingle($c), $conversations),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function mapSingle(Conversation $conversation): ConversationListResource

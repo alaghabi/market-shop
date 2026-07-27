@@ -11,6 +11,8 @@ final readonly class DispatchNotificationMessage
         public string $channel,
         public string $recipient,
         public array $variables = [],
+        public ?string $orderId = null,
+        public ?string $deduplicationKey = null,
     ) {
     }
 }

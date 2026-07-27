@@ -1,12 +1,43 @@
 framework:
     messenger:
         transports:
-            async: '%env(MESSENGER_TRANSPORT_DSN)%'
-            failed: 'doctrine://default?queue_name=failed'
+            async_high:
+                dsn: '%env(MESSENGER_HIGH_DSN)%'
+                retry_strategy:
+                    max_retries: 5
+                    delay: 2000
+                    multiplier: 2
+                    max_delay: 60000
+            async_webhook:
+                dsn: '%env(MESSENGER_WEBHOOK_DSN)%'
+                retry_strategy:
+                    max_retries: 5
+                    delay: 2000
+                    multiplier: 2
+                    max_delay: 60000
+            async_chatbot:
+                dsn: '%env(MESSENGER_CHATBOT_DSN)%'
+                retry_strategy:
+                    max_retries: 5
+                    delay: 2000
+                    multiplier: 2
+                    max_delay: 60000
+            async_logistics:
+                dsn: '%env(MESSENGER_LOGISTICS_DSN)%'
+                retry_strategy:
+                    max_retries: 5
+                    delay: 2000
+                    multiplier: 2
+                    max_delay: 60000
+            failed: '%env(MESSENGER_FAILED_DSN)%'
+        failure_transport: failed
+        buses:
+            messenger.bus.default:
+                middleware:
+                    - App\Messenger\Middleware\RedisMessageIdempotencyMiddleware
         routing:
-            App\Message\ExampleMessage: async
-            App\Message\DispatchNotificationMessage: async
-            App\Message\DispatchWebhookEventMessage: async
-            App\Message\ChatbotQueryMessage: async
-            App\Message\CreateShipmentMessage: async
-            App\Message\SyncShipmentTrackingMessage: async
+            App\Message\DispatchNotificationMessage: async_high
+            App\Message\DispatchWebhookEventMessage: async_webhook
+            App\Message\ChatbotQueryMessage: async_chatbot
+            App\Message\CreateShipmentMessage: async_logistics
+            App\Message\SyncShipmentTrackingMessage: async_logistics

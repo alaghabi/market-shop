@@ -1,20 +1,12 @@
 import { Menu, ShoppingCart, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BoutiqueAccountLink } from '../BoutiqueCustomerAccount';
-import { boutiqueLink } from '../boutiqueRouting';
+import { boutiqueLink, boutiqueQuery } from '../boutiqueRouting';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
 import { CartSheet, type CartItem } from './CartSheet';
 import { FavoritesPopover } from './FavoritesPopover';
-import type { StoreBoutique } from './StorefrontTheme';
-
-const navigation = [
-  { label: 'Accueil', path: '/' },
-  { label: 'Catalogue', path: '/catalogue' },
-  { label: 'Promotions', path: '/promotions' },
-  { label: 'Avis', path: '/avis', requiresReviews: true },
-  { label: 'A propos', path: '/a-propos' },
-  { label: 'Contact', path: '/contact' },
-] as const;
+import type { StoreAnnouncement, StoreBoutique } from './StorefrontTheme';
+import { resolveStorefrontNavigation } from './content';
 
 type StorefrontHeaderProps = {
   boutique: StoreBoutique;
@@ -26,41 +18,78 @@ type StorefrontHeaderProps = {
   onFavoritesRefresh?: () => void;
   cartOpen?: boolean;
   onCartOpenChange?: (open: boolean) => void;
+  announcements?: StoreAnnouncement[];
 };
 
-export function StorefrontHeader({ boutique, showCart = true, cartItems, onSetCartQty, onRemoveCartItem, favoriteCount = 0, onFavoritesRefresh, cartOpen, onCartOpenChange }: StorefrontHeaderProps) {
+export function StorefrontHeader({ boutique, showCart = true, cartItems, onSetCartQty, onRemoveCartItem, favoriteCount = 0, onFavoritesRefresh, cartOpen, onCartOpenChange, announcements: suppliedAnnouncements }: StorefrontHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const navItems = navigation.filter((item) => !('requiresReviews' in item && item.requiresReviews) || boutique.reviewsEnabled === true);
+  const [announcements, setAnnouncements] = useState<StoreAnnouncement[]>(suppliedAnnouncements ?? []);
+  const navItems = resolveStorefrontNavigation(boutique, boutique.reviewsEnabled === true);
+
+  useEffect(() => {
+    if (suppliedAnnouncements) {
+      setAnnouncements(suppliedAnnouncements);
+      return;
+    }
+
+    let cancelled = false;
+    fetch(`/api/announcements${boutiqueQuery(boutique.slug)}`)
+      .then((response) => response.ok ? response.json() : [])
+      .then((payload: { member?: StoreAnnouncement[]; items?: StoreAnnouncement[] } | StoreAnnouncement[]) => {
+        if (cancelled) return;
+        const items = Array.isArray(payload) ? payload : payload.member ?? payload.items ?? [];
+        setAnnouncements(items);
+      })
+      .catch(() => {
+        if (!cancelled) setAnnouncements([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [boutique.slug, suppliedAnnouncements]);
+
+  const topBarAnnouncement = announcements
+    .filter((announcement) => announcement.active !== false && announcement.visible !== false)
+    .filter((announcement) => (announcement.categoryIds ?? []).length === 0 && (announcement.productIds ?? []).length === 0)
+    .filter((announcement) => {
+      const pages = announcement.displayPages ?? [];
+      return pages.length === 0 || pages.includes('all') || pages.includes('home');
+    })
+    .filter((announcement) => announcement.displayType === 'TOP_BAR' || ['HEADER_TOP', 'TOP_PAGE'].includes(announcement.position ?? ''))
+    .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0))[0];
 
   return (
     <>
-      <div className="border-b border-black/8 bg-[#ece5d9] text-[#171717]">
+      {topBarAnnouncement && <div className="border-b border-black/8 text-[#171717]" style={{ backgroundColor: topBarAnnouncement.backgroundColor ?? '#ece5d9', color: topBarAnnouncement.textColor ?? '#171717', borderColor: topBarAnnouncement.borderColor ?? undefined }}>
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-2 text-xs sm:px-6 lg:px-8">
-          <div className="font-medium">Livraison offerte des 60 DT · Retours 30 jours</div>
-          <div className="flex items-center gap-4 text-black/65">
+          <div className="font-medium">
+            {topBarAnnouncement.linkUrl ? <a href={topBarAnnouncement.linkUrl.startsWith('/') ? boutiqueLink(topBarAnnouncement.linkUrl) : topBarAnnouncement.linkUrl} className="hover:underline">{topBarAnnouncement.title?.trim() || topBarAnnouncement.content.trim()}</a> : (topBarAnnouncement.title?.trim() || topBarAnnouncement.content.trim())}
+          </div>
+          <div className="flex items-center gap-4 opacity-70">
             {boutique.email && <a href={`mailto:${boutique.email}`} className="hover:text-black">{boutique.email}</a>}
-            <span className="hidden sm:inline">Support 7j/7</span>
+            {topBarAnnouncement.subtitle && <span className="hidden sm:inline">{topBarAnnouncement.subtitle}</span>}
           </div>
         </div>
-      </div>
+      </div>}
       <header className="sticky top-0 z-30 border-b border-black/10 bg-[color:var(--sf-bg,#f6f2eb)]/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex h-20 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
           <button type="button" onClick={() => setMenuOpen(true)} className="sf-menu-toggle rounded-full p-2 text-[#171717] lg:hidden" aria-label="Menu">
             <Menu className="h-5 w-5" />
           </button>
           <a href={boutiqueLink('/')} className="flex items-center gap-3">
             <ImageWithFallback src={boutique.logoUrl} alt={boutique.logoUrl ? boutique.name : 'Hanooti'} className="h-10 w-10 rounded-full object-cover" />
-            <div>
+            <div className="hidden lg:block">
               <div className="text-xs uppercase tracking-[0.28em] text-black/50">{boutique.slogan || 'Boutique'}</div>
               <div className="text-lg font-semibold tracking-tight">{boutique.name}</div>
             </div>
           </a>
 
-          <nav className="sf-desktop-nav hidden items-center gap-8 lg:flex" aria-label="Navigation boutique">
-            {navItems.map((item) => <a key={item.path} href={boutiqueLink(item.path)} className="text-sm font-medium text-black/70 transition hover:text-black">{item.label}</a>)}
+           <nav className="sf-desktop-nav hidden items-center gap-8 lg:ml-auto lg:flex" aria-label="Navigation boutique">
+             {navItems.map((item) => <a key={item.href} href={item.href} className="text-sm font-medium text-black/70 transition hover:text-black">{item.label}</a>)}
           </nav>
 
-          <div className="flex items-center gap-2">
+           <div className="ml-auto flex items-center gap-2 lg:ml-auto">
             {boutique.wishlistEnabled === true && <FavoritesPopover boutiqueSlug={boutique.slug} favoriteCount={favoriteCount} onRefresh={onFavoritesRefresh} />}
               {showCart && cartItems && onSetCartQty && onRemoveCartItem ? (
                  <CartSheet items={cartItems} onSetQty={onSetCartQty} onRemove={onRemoveCartItem} open={cartOpen} onOpenChange={onCartOpenChange} />
@@ -86,7 +115,7 @@ export function StorefrontHeader({ boutique, showCart = true, cartItems, onSetCa
               </button>
             </div>
             <nav className="space-y-4" aria-label="Navigation mobile">
-              {navItems.map((item) => <a key={item.path} href={boutiqueLink(item.path)} className="block text-lg font-medium text-black/80">{item.label}</a>)}
+               {navItems.map((item) => <a key={item.href} href={item.href} className="block text-lg font-medium text-black/80">{item.label}</a>)}
             </nav>
           </div>
         </div>

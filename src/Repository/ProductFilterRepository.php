@@ -26,4 +26,38 @@ final class ProductFilterRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /** @return array{items: list<ProductFilter>, total: int} */
+    public function findForBackoffice(?string $boutiqueId, bool $activeOnly, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('filter');
+
+        if (null !== $boutiqueId) {
+            $query->andWhere('filter.boutique = :boutiqueId')
+                ->setParameter('boutiqueId', $boutiqueId);
+        }
+
+        if ($activeOnly) {
+            $query->andWhere('filter.active = true');
+        }
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(filter.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('filter.position', 'ASC')
+            ->addOrderBy('filter.name', 'ASC')
+            ->addOrderBy('filter.id', 'ASC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
 }

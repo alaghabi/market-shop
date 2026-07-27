@@ -39,4 +39,31 @@ final class DeliveryRuleRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /** @return array{items: list<DeliveryRule>, total: int} */
+    public function findForBackoffice(Boutique $boutique, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('rule')
+            ->andWhere('rule.boutique = :boutique')
+            ->setParameter('boutique', $boutique);
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(rule.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('rule.priority', 'DESC')
+            ->addOrderBy('rule.createdAt', 'DESC')
+            ->addOrderBy('rule.id', 'DESC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
 }

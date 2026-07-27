@@ -8,22 +8,23 @@ use App\ApiResource\Chat\ConversationResource;
 use App\Entity\Conversation;
 use App\Repository\ConversationRepository;
 use App\Service\Chat\ChatAccessService;
-use App\State\Common\BoutiqueAwareProviderTrait;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 /** @implements ProviderInterface<ConversationResource> */
 final class ConversationProvider implements ProviderInterface
 {
-    use BoutiqueAwareProviderTrait;
-
     public function __construct(
         private ConversationRepository $repository,
         private ChatAccessService $access,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): ConversationResource|array|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|ConversationResource|null
     {
         $id = $uriVariables['id'] ?? null;
 
@@ -41,24 +42,21 @@ final class ConversationProvider implements ProviderInterface
             return $this->mapSingle($conversation);
         }
 
-        if ($this->access->canManageAllConversations()) {
-            $items = $this->repository->findBy([], ['createdAt' => 'DESC']);
-
-            return array_map(fn (Conversation $c) => $this->mapSingle($c), $items);
-        }
-
-        $boutique = $this->resolveBoutiqueFromRequest($context);
-
-        if (!$boutique) {
-            return [];
-        }
-
-        $items = $this->repository->findBy(
-            ['boutique' => $boutique],
-            ['createdAt' => 'DESC'],
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
+        $result = $this->repository->findForBackoffice(
+            $this->scope->resolve($request),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
         );
 
-        return array_map(fn (Conversation $c) => $this->mapSingle($c), $items);
+        return new BackofficePaginator(
+            array_map(fn (Conversation $c) => $this->mapSingle($c), $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function getGuestToken(array $context): ?string

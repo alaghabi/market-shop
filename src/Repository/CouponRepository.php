@@ -40,4 +40,31 @@ final class CouponRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /** @return array{items: list<Coupon>, total: int} */
+    public function findForBackoffice(string $boutiqueId, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('coupon')
+            ->andWhere('coupon.boutique = :boutiqueId')
+            ->andWhere('coupon.deletedAt IS NULL')
+            ->setParameter('boutiqueId', $boutiqueId);
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(coupon.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('coupon.createdAt', 'DESC')
+            ->addOrderBy('coupon.id', 'DESC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
 }

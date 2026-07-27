@@ -10,10 +10,12 @@ use App\Entity\SubscriptionModule;
 use App\Repository\SubscriptionModuleRepository;
 use App\Repository\SubscriptionPlanRepository;
 use App\Repository\SubscriptionPlanModuleRepository;
+use App\Service\Backoffice\BackofficeScopeResolver;
 use App\Service\Module\ModuleCacheService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
+/** @implements ProcessorInterface<SubscriptionModuleInput, SubscriptionModuleOutput|null> */
 final class SubscriptionModuleProcessor implements ProcessorInterface
 {
     public function __construct(
@@ -22,6 +24,7 @@ final class SubscriptionModuleProcessor implements ProcessorInterface
         private readonly SubscriptionPlanModuleRepository $modules,
         private readonly EntityManagerInterface $em,
         private readonly ModuleCacheService $cache,
+        private readonly BackofficeScopeResolver $scope,
     ) {
     }
 
@@ -59,7 +62,7 @@ final class SubscriptionModuleProcessor implements ProcessorInterface
 
         $this->cache->deletePlanModules((string) $plan->getId());
 
-        return (new SubscriptionModuleProvider($this->repository, $this->plans))->toOutput($entity);
+        return (new SubscriptionModuleProvider($this->repository, $this->plans, $this->scope))->toOutput($entity);
     }
 
     private function update(string $id, mixed $data): SubscriptionModuleOutput
@@ -76,7 +79,7 @@ final class SubscriptionModuleProcessor implements ProcessorInterface
 
         $this->cache->deletePlanModules((string) $entity->getPlan()->getId());
 
-        return (new SubscriptionModuleProvider($this->repository, $this->plans))->toOutput($entity);
+        return (new SubscriptionModuleProvider($this->repository, $this->plans, $this->scope))->toOutput($entity);
     }
 
     private function delete(string $id): void

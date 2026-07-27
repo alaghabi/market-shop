@@ -93,7 +93,7 @@ final readonly class ProductProcessor implements ProcessorInterface
         $slug = $this->resolveUniqueSlug($slug, $boutique->getId(), $uriVariables['id'] ?? null);
         $metaTitle = $data->metaTitle ?: $this->seo->defaultMetaTitle($data->name, $boutique->getName());
         $metaDescription = $data->metaDescription ?: $this->seo->defaultMetaDescription($data->shortDescription ?? $data->description, $data->name);
-        $ogImage = $data->ogImage ?: $this->seo->defaultOgImage($data->images[0] ?? null);
+        $ogImage = $data->ogImage ?: $this->seo->defaultOgImage($data->defaultImageUrl ?: ($data->images[0] ?? null));
 
         $status = ProductStatus::tryFrom($data->status) ?? ProductStatus::Draft;
         $publishedAt = $data->publishedAt ? new \DateTimeImmutable($data->publishedAt) : null;
@@ -191,8 +191,9 @@ final readonly class ProductProcessor implements ProcessorInterface
         $this->em->persist($stock);
 
         $this->syncFilterValues($product, $data, $boutique);
-        $this->syncImages($product, $data);
-        $this->syncMedia($product, $data);
+        $images = $this->orderedImages($data);
+        $this->syncImages($product, $images);
+        $this->syncMedia($product, $images);
         $this->syncVariants($product, $data);
         $this->syncProperties($product, $data);
         $this->syncCategories($product, $data);
@@ -205,55 +206,93 @@ final readonly class ProductProcessor implements ProcessorInterface
 
     private function syncFilterValues(Product $product, ProductInput $data, \App\Entity\Boutique $boutique): void
     {
+        $hadFilterValues = $product->getFilterValues()->count() > 0;
         foreach ($product->getFilterValues()->toArray() as $fv) {
+            $product->removeFilterValue($fv);
             $this->em->remove($fv);
         }
-        $product->clearFilterValues();
+
+        // Delete old rows before inserting replacement values protected by a unique index.
+        if ($hadFilterValues) {
+            $this->em->flush();
+        }
 
         foreach ($data->filterValues as $filterId => $value) {
             $filter = $this->filters->find((string) $filterId);
-            if (!$filter instanceof \App\Entity\ProductFilter || '' === trim((string) $value)) {
+            if (!$filter instanceof \App\Entity\ProductFilter) {
                 continue;
             }
             if ((string) $filter->getBoutique()->getId() !== (string) $boutique->getId()) {
                 continue;
             }
-            $fv = new ProductFilterValue($filter, $product, trim((string) $value));
-            $product->addFilterValue($fv);
-            $this->em->persist($fv);
+
+            $values = is_array($value) ? $value : [$value];
+            foreach ($values as $filterValue) {
+                $normalizedValue = trim((string) $filterValue);
+                if ('' === $normalizedValue) {
+                    continue;
+                }
+                $fv = new ProductFilterValue($filter, $product, $normalizedValue);
+                $product->addFilterValue($fv);
+                $this->em->persist($fv);
+            }
         }
     }
 
-    private function syncImages(Product $product, ProductInput $data): void
+    /** @param list<string> $images */
+    private function syncImages(Product $product, array $images): void
     {
         foreach ($product->getImages()->toArray() as $image) {
             $this->em->remove($image);
         }
 
-        foreach ($data->images as $i => $url) {
+        foreach ($images as $i => $url) {
             $image = new ProductImage($product, $url, $i);
             $product->getImages()->add($image);
             $this->em->persist($image);
         }
     }
 
-    private function syncMedia(Product $product, ProductInput $data): void
+    /** @param list<string> $images */
+    private function syncMedia(Product $product, array $images): void
     {
         foreach ($product->getMedia()->toArray() as $medium) {
             $this->em->remove($medium);
         }
 
-        if ([] !== $data->images) {
-            $primary = new ProductMedia($product, 'IMAGE', $data->images[0], 0, null, true);
+        if ([] !== $images) {
+            $primary = new ProductMedia($product, 'IMAGE', $images[0], 0, null, true);
             $product->addMedium($primary);
             $this->em->persist($primary);
 
-            foreach (\array_slice($data->images, 1) as $i => $url) {
+            foreach (\array_slice($images, 1) as $i => $url) {
                 $medium = new ProductMedia($product, 'IMAGE', $url, $i + 1);
                 $product->addMedium($medium);
                 $this->em->persist($medium);
             }
         }
+    }
+
+    /** @return list<string> */
+    private function orderedImages(ProductInput $data): array
+    {
+        $images = array_values(array_filter(
+            array_map(static fn (mixed $url): string => trim((string) $url), $data->images),
+            static fn (string $url): bool => '' !== $url,
+        ));
+        if (null === $data->defaultImageUrl || '' === trim($data->defaultImageUrl)) {
+            return $images;
+        }
+
+        $defaultIndex = array_search(trim($data->defaultImageUrl), $images, true);
+        if (false === $defaultIndex || 0 === $defaultIndex) {
+            return $images;
+        }
+
+        $default = $images[$defaultIndex];
+        unset($images[$defaultIndex]);
+
+        return array_values([$default, ...$images]);
     }
 
     private function syncVariants(Product $product, ProductInput $data): void
@@ -300,8 +339,13 @@ final readonly class ProductProcessor implements ProcessorInterface
 
     private function syncCategories(Product $product, ProductInput $data): void
     {
+        $hadCategories = $product->getProductCategories()->count() > 0;
         foreach ($product->getProductCategories()->toArray() as $pc) {
             $this->em->remove($pc);
+        }
+
+        if ($hadCategories) {
+            $this->em->flush();
         }
 
         foreach ($data->categoryIds as $categoryId) {

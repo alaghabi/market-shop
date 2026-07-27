@@ -15,6 +15,7 @@ use App\State\Chat\ConversationListProvider;
             security: "is_granted('ROLE_BOUTIQUE_ADMIN') or is_granted('ROLE_SUPER_ADMIN')",
         ),
     ],
+    paginationItemsPerPage: 20,
 )]
 final class ConversationListResource
 {

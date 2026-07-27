@@ -4,12 +4,16 @@ namespace App\State\ShopModule;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\ShopModule\ShopModuleOutput;
 use App\Entity\Boutique;
 use App\Entity\ShopModule;
 use App\Repository\BoutiqueRepository;
 use App\Repository\ShopModuleRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /** @implements ProviderInterface<ShopModuleOutput> */
@@ -19,16 +23,21 @@ final class ShopModuleProvider implements ProviderInterface
         private readonly ShopModuleRepository $repository,
         private readonly BoutiqueRepository $boutiques,
         private readonly BoutiqueContext $context,
+        private readonly BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return array<ShopModuleOutput>|ShopModuleOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|ShopModuleOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|ShopModuleOutput|null
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $boutique = $this->findBoutique((string) ($uriVariables['boutiqueId'] ?? ''));
 
         if (!$this->context->canAccessBoutique($boutique)) {
-            return null;
+            return isset($uriVariables['id'])
+                ? null
+                : new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
         }
 
         if (isset($uriVariables['id'])) {
@@ -40,9 +49,18 @@ final class ShopModuleProvider implements ProviderInterface
             return $this->toOutput($entity);
         }
 
-        $entities = $this->repository->findByBoutique($boutique);
+        $result = $this->repository->findForBackoffice(
+            $boutique,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
 
-        return array_map([$this, 'toOutput'], $entities);
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function toOutput(ShopModule $entity): ShopModuleOutput

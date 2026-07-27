@@ -13,6 +13,7 @@ use App\Repository\BoutiqueDeliveryAccountRepository;
 use App\Repository\BoutiqueRepository;
 use App\Repository\DeliveryCompanyRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Delivery\DeliveryCredentialFieldSchema;
 use App\Service\Delivery\DeliveryEngine;
 use App\Service\Delivery\EncryptionService;
 use App\State\Common\BoutiqueWriteResolverTrait;
@@ -31,6 +32,7 @@ final class BoutiqueDeliveryAccountProcessor implements ProcessorInterface
         private readonly BoutiqueContext $context,
         private readonly EncryptionService $encryption,
         private readonly DeliveryEngine $engine,
+        private readonly DeliveryCredentialFieldSchema $credentialFields,
     ) {
     }
 
@@ -58,12 +60,15 @@ final class BoutiqueDeliveryAccountProcessor implements ProcessorInterface
 
         if (isset($uriVariables['id'])) {
             $entity = $this->findAccount($boutique, (string) $uriVariables['id']);
+            $this->credentialFields->assertValid($entity->getDeliveryCompany(), $data, $entity);
             $this->applyInput($entity, $data);
         } else {
             $company = $this->companyRepository->find($data->deliveryCompanyId);
             if (!$company) {
                 throw new NotFoundHttpException('Delivery company not found');
             }
+
+            $this->credentialFields->assertValid($company, $data);
 
             $entity = new BoutiqueDeliveryAccount(
                 boutique: $boutique,

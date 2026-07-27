@@ -26,6 +26,20 @@ final class PaymentMethodRepository extends ServiceEntityRepository
         return $this->findBy(['isActive' => true, 'isVisible' => true], ['name' => 'ASC']);
     }
 
+    /** @return array{items: list<PaymentMethod>, total: int} */
+    public function findForBackoffice(int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('paymentMethod');
+        $countQuery = clone $query;
+        $total = (int) $countQuery->resetDQLPart('select')->resetDQLPart('orderBy')
+            ->select('COUNT(paymentMethod.id)')->getQuery()->getSingleScalarResult();
+        $items = $query->orderBy('paymentMethod.name', 'ASC')->addOrderBy('paymentMethod.id', 'ASC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)->setMaxResults($itemsPerPage)
+            ->getQuery()->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
     public function findOneByCode(string $code): ?PaymentMethod
     {
         return $this->findOneBy(['code' => $code]);

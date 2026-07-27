@@ -8,8 +8,8 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
-use App\State\Common\EmptyProvider;
-use App\State\Common\PassthroughProcessor;
+use App\State\Customer\CustomerProvider;
+use App\State\Customer\CustomerProcessor;
 
 #[ApiResource(
     shortName: 'Customer',
@@ -17,11 +17,11 @@ use App\State\Common\PassthroughProcessor;
         new GetCollection(uriTemplate: '/customers', security: "is_granted('ROLE_CAISSIER')"),
         new Post(uriTemplate: '/customers', security: "is_granted('ROLE_CAISSIER')"),
         new Get(uriTemplate: '/customers/{id}', security: "is_granted('ROLE_CAISSIER')"),
-        new Patch(uriTemplate: '/customers/{id}', security: "is_granted('ROLE_CAISSIER')"),
-        new Delete(uriTemplate: '/customers/{id}', security: "is_granted('ROLE_BOUTIQUE_ADMIN')"),
+        new Patch(uriTemplate: '/customers/{id}', security: "is_granted('ROLE_BOUTIQUE_ADMIN') or is_granted('ROLE_SUPER_ADMIN')", processor: CustomerProcessor::class),
+        new Delete(uriTemplate: '/customers/{id}', security: "is_granted('ROLE_BOUTIQUE_ADMIN') or is_granted('ROLE_SUPER_ADMIN')", read: false, processor: CustomerProcessor::class),
     ],
-    provider: EmptyProvider::class,
-    processor: PassthroughProcessor::class,
+    provider: CustomerProvider::class,
+    processor: CustomerProcessor::class,
 )]
 final class CustomerResource
 {
@@ -31,4 +31,5 @@ final class CustomerResource
     public ?string $firstName = null;
     public ?string $lastName = null;
     public ?string $phone = null;
+    public bool $active = true;
 }

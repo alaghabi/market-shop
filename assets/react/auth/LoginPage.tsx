@@ -188,7 +188,7 @@ export function LoginPage({ onSignIn, onSignUp, initialMode = 'login' }: LoginPa
                   <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
                   <span>Se souvenir de moi</span>
                 </label>
-                <a href="mailto:contact@hanooti.com?subject=Demande%20de%20reinitialisation">Mot de passe oublié ?</a>
+                <Link to="/auth/forgot-password">Mot de passe oublié ?</Link>
               </div>
 
               {error && <div className="lovable-auth__error">{error}</div>}

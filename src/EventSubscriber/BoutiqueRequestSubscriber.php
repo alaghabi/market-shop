@@ -12,13 +12,11 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
-use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
 final class BoutiqueRequestSubscriber implements EventSubscriberInterface
 {
     public function __construct(
         private SubdomainResolver $resolver,
-        private AuthorizationCheckerInterface $auth,
         private TokenStorageInterface $tokenStorage,
         private BoutiqueRepository $boutiques,
         private BoutiqueContext $boutiqueContext,
@@ -67,43 +65,43 @@ final class BoutiqueRequestSubscriber implements EventSubscriberInterface
         $request->attributes->set('_boutique', $boutique);
         $request->attributes->set('_boutique_id', $boutique->getId());
 
-        $isAdmin = $this->isAuthenticatedAdmin();
-        if ($isAdmin && !$this->boutiqueContext->canAccessBoutique($boutique)) {
+        $isStaff = $this->isAuthenticatedStaff();
+        if ($isStaff && !$this->boutiqueContext->canAccessBoutique($boutique)) {
             throw new AccessDeniedHttpException('Accès à cette boutique refusé.');
         }
         $status = $boutique->getStatus();
 
         // PENDING boutiques: only accessible by admins
-        if (BoutiqueStatus::Pending === $status && !$isAdmin) {
+        if (BoutiqueStatus::Pending === $status && !$isStaff) {
             throw new AccessDeniedHttpException('Cette boutique est en attente d\'approbation.');
         }
 
         // SUSPENDED boutiques: still accessible by admins for management
-        if (BoutiqueStatus::Suspended === $status && !$isAdmin) {
+        if (BoutiqueStatus::Suspended === $status && !$isStaff) {
             throw new AccessDeniedHttpException('Cette boutique est suspendue.');
         }
 
         // REJECTED boutiques: not accessible publicly
-        if (BoutiqueStatus::Rejected === $status && !$isAdmin) {
+        if (BoutiqueStatus::Rejected === $status && !$isStaff) {
             throw new NotFoundHttpException('Page non trouvée');
         }
 
         // ARCHIVED boutiques: not accessible
-        if (BoutiqueStatus::Archived === $status && !$isAdmin) {
+        if (BoutiqueStatus::Archived === $status && !$isStaff) {
             throw new NotFoundHttpException('Page non trouvée');
         }
 
-        if (!$isAdmin && !$boutique->isVisiblePublicly()) {
+        if (!$isStaff && !$boutique->isVisiblePublicly()) {
             throw new NotFoundHttpException('Page non trouvée');
         }
     }
 
-    private function isAuthenticatedAdmin(): bool
+    private function isAuthenticatedStaff(): bool
     {
         if (null === $this->tokenStorage->getToken()) {
             return false;
         }
 
-        return $this->auth->isGranted('ROLE_BOUTIQUE_ADMIN');
+        return $this->boutiqueContext->isStaff();
     }
 }

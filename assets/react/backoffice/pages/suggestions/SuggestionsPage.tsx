@@ -98,6 +98,7 @@ export function SuggestionsPage({
   const canManage = isSuperAdmin || userRoles.includes('ROLE_BOUTIQUE_ADMIN');
   const disabled = !isSuperAdmin && !boutique;
   const [page, setPage] = useState(1);
+  const [categoryPage, setCategoryPage] = useState(1);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [category, setCategory] = useState('');
@@ -139,14 +140,14 @@ export function SuggestionsPage({
   }, [api, page, search, status, category, from, to, sort]);
 
   const fetchCategories = useCallback(
-    () => api.getCollection<SuggestionCategory>('/public/suggestion-categories'),
+    () => api.getCollection<SuggestionCategory>('/public/suggestion-categories?itemsPerPage=100'),
     [api],
   );
   const fetchAdminCategories = useCallback(
     () => isSuperAdmin
-      ? api.getCollection<SuggestionCategory>('/admin/suggestion-categories')
+      ? api.getCollection<SuggestionCategory>(`/admin/suggestion-categories?page=${categoryPage}&itemsPerPage=${PAGE_SIZE}`)
       : Promise.resolve({ member: [], totalItems: 0 }),
-    [api, isSuperAdmin],
+    [api, isSuperAdmin, categoryPage],
   );
   const { data, isLoading, error, refresh } = useApiData(fetchSuggestions, [page, search, status, category, from, to, sort]);
   const { data: categoryData, refresh: refreshCategories } = useApiData(fetchCategories, []);
@@ -155,11 +156,12 @@ export function SuggestionsPage({
     isLoading: adminCategoriesLoading,
     error: adminCategoriesError,
     refresh: refreshAdminCategories,
-  } = useApiData(fetchAdminCategories, [isSuperAdmin]);
+  } = useApiData(fetchAdminCategories, [isSuperAdmin, categoryPage]);
   const suggestions = data?.member ?? [];
   const categories = categoryData?.member ?? [];
   const adminCategories = adminCategoryData?.member ?? [];
   const totalPages = Math.max(1, Math.ceil((data?.totalItems ?? suggestions.length) / PAGE_SIZE));
+  const categoryTotalPages = Math.max(1, Math.ceil((adminCategoryData?.totalItems ?? 0) / PAGE_SIZE));
 
   function resetFilters() {
     setSearch('');
@@ -480,24 +482,27 @@ export function SuggestionsPage({
             ) : adminCategories.length === 0 ? (
               <EmptyState title="Aucune catégorie" message="Créez une catégorie pour organiser les suggestions." action={{ label: 'Créer une catégorie', onClick: openCategoryCreate }} />
             ) : (
-              <Table
-                columns={[
-                  { key: 'name', label: 'Nom', sortable: true, render: (item: SuggestionCategory) => <div><strong>{item.name}</strong><div className="bo-table-secondary">{item.slug}</div></div> },
-                  { key: 'position', label: 'Position', render: (item: SuggestionCategory) => item.position },
-                  { key: 'isActive', label: 'Statut', render: (item: SuggestionCategory) => <Badge tone={item.isActive ? 'success' : 'neutral'}>{item.isActive ? 'Actif' : 'Inactif'}</Badge> },
-                ]}
-                data={adminCategories}
-                renderActions={(item) => (
-                  <>
-                    <Button size="sm" variant="ghost" disabled={categoryActionLoading === item.id} onClick={() => openCategoryEdit(item)}>Modifier</Button>
-                    <Button size="sm" variant="secondary" disabled={categoryActionLoading === item.id} onClick={() => { void updateCategoryStatus(item, !item.isActive); }}>
-                      {categoryActionLoading === item.id ? '...' : item.isActive ? 'Désactiver' : 'Activer'}
-                    </Button>
-                    <Button size="sm" variant="danger" disabled={categoryActionLoading === item.id} onClick={() => setCategoryToDelete(item)}>Supprimer</Button>
-                  </>
-                )}
-              />
-            )}
+              <>
+                <Table
+                  columns={[
+                    { key: 'name', label: 'Nom', sortable: true, render: (item: SuggestionCategory) => <div><strong>{item.name}</strong><div className="bo-table-secondary">{item.slug}</div></div> },
+                    { key: 'position', label: 'Position', render: (item: SuggestionCategory) => item.position },
+                    { key: 'isActive', label: 'Statut', render: (item: SuggestionCategory) => <Badge tone={item.isActive ? 'success' : 'neutral'}>{item.isActive ? 'Actif' : 'Inactif'}</Badge> },
+                  ]}
+                  data={adminCategories}
+                  renderActions={(item) => (
+                    <>
+                      <Button size="sm" variant="ghost" disabled={categoryActionLoading === item.id} onClick={() => openCategoryEdit(item)}>Modifier</Button>
+                      <Button size="sm" variant="secondary" disabled={categoryActionLoading === item.id} onClick={() => { void updateCategoryStatus(item, !item.isActive); }}>
+                        {categoryActionLoading === item.id ? '...' : item.isActive ? 'Désactiver' : 'Activer'}
+                      </Button>
+                      <Button size="sm" variant="danger" disabled={categoryActionLoading === item.id} onClick={() => setCategoryToDelete(item)}>Supprimer</Button>
+                    </>
+                  )}
+                />
+                <Pagination page={categoryPage} totalPages={categoryTotalPages} onPageChange={setCategoryPage} />
+              </>
+             )}
           </CardBody>
         </Card>
       )}

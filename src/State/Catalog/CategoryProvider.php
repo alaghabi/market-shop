@@ -5,12 +5,16 @@ namespace App\State\Catalog;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Catalog\CategoryOutput;
 use App\Entity\Category;
 use App\Repository\BoutiqueRepository;
 use App\Repository\CategoryRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Backoffice\BackofficeScopeResolver;
 use App\State\Common\BoutiqueAwareProviderTrait;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 
 /** @implements ProviderInterface<CategoryOutput> */
 final readonly class CategoryProvider implements ProviderInterface
@@ -21,16 +25,21 @@ final readonly class CategoryProvider implements ProviderInterface
         private CategoryRepository $categories,
         private BoutiqueRepository $boutiques,
         private BoutiqueContext $context,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return list<CategoryOutput>|CategoryOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|CategoryOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|CategoryOutput|null
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $boutique = $this->resolveBoutiqueFromRequest($context, $uriVariables);
         if (!$boutique) {
             if (!$this->context->isSuperAdmin()) {
-                return $operation instanceof Get ? null : [];
+                return $operation instanceof Get
+                    ? null
+                    : new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
             }
 
             if ($operation instanceof Get) {
@@ -39,9 +48,17 @@ final readonly class CategoryProvider implements ProviderInterface
                 return $category instanceof Category ? $this->toOutput($category) : null;
             }
 
-            return array_map(
-                [$this, 'toOutput'],
-                $this->categories->findBy(['deletedAt' => null], ['name' => 'ASC']),
+            $result = $this->categories->findForBackoffice(
+                null,
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
+
+            return new BackofficePaginator(
+                array_map([$this, 'toOutput'], $result['items']),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+                $result['total'],
             );
         }
 
@@ -53,9 +70,17 @@ final readonly class CategoryProvider implements ProviderInterface
                 : null;
         }
 
-        return array_map(
-            [$this, 'toOutput'],
-            $this->categories->findByBoutique($boutique),
+        $result = $this->categories->findForBackoffice(
+            $boutique,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
+
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
         );
     }
 

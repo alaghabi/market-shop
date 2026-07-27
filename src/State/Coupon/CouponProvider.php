@@ -8,9 +8,13 @@ use App\Repository\CouponRepository;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\State\Common\BoutiqueAwareProviderTrait;
 use App\Repository\BoutiqueRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 use App\Entity\Boutique;
 
 final class CouponProvider implements ProviderInterface
@@ -21,10 +25,11 @@ final class CouponProvider implements ProviderInterface
         private CouponRepository $coupons,
         private BoutiqueRepository $boutiques,
         private BoutiqueContext $context,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): CouponOutput|array|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|CouponOutput|null
     {
         if ($operation instanceof GetCollection) {
             return $this->getCollection($operation, $uriVariables, $context);
@@ -39,17 +44,28 @@ final class CouponProvider implements ProviderInterface
         return $this->toOutput($coupon);
     }
 
-    /** @return list<CouponOutput> */
-    public function getCollection(Operation $operation, array $uriVariables = [], array $context = []): array
+    public function getCollection(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $boutique = $this->resolveBoutiqueFromRequest($context);
         if (!$boutique) {
-            return [];
+            return new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
         }
 
-        $coupons = $this->coupons->findByBoutique((string) $boutique->getId());
+        $result = $this->coupons->findForBackoffice(
+            (string) $boutique->getId(),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
 
-        return array_map($this->toOutput(...), $coupons);
+        return new BackofficePaginator(
+            array_map($this->toOutput(...), $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function toOutput(Coupon $coupon): CouponOutput

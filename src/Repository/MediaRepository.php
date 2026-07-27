@@ -22,6 +22,32 @@ final class MediaRepository extends ServiceEntityRepository
         return $this->findBy(['boutique' => $boutique], ['createdAt' => 'DESC']);
     }
 
+    /** @return array{items: list<Media>, total: int} */
+    public function findForBackoffice(Boutique $boutique, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('media')
+            ->andWhere('media.boutique = :boutique')
+            ->setParameter('boutique', $boutique);
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(media.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('media.createdAt', 'DESC')
+            ->addOrderBy('media.id', 'DESC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
     /** @return Media[] */
     public function findByBoutiqueAndType(Boutique $boutique, MediaType $type): array
     {

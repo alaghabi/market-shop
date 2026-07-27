@@ -8,6 +8,7 @@ import { Modal } from '../../components/Modal';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { FormField, Input, Select, Textarea } from '../../components/FormField';
 import { useNotification } from '../../hooks/useNotification';
+import { Pagination } from '../../components/Pagination';
 
 type DeliveryEndpoint = {
   id: string;
@@ -108,6 +109,7 @@ function parseJsonOrNull(value: string): Record<string, unknown> | null {
 }
 
 type Tab = 'companies' | 'logs' | 'variables';
+const PAGE_SIZE = 20;
 
 export function DeliveryAdminPanel({ getAccessToken }: { getAccessToken: () => string | null }) {
   const api = useApiClient(getAccessToken);
@@ -141,21 +143,28 @@ export function DeliveryAdminPanel({ getAccessToken }: { getAccessToken: () => s
   const [previewJson, setPreviewJson] = useState('');
 
   const [logFilterCompany, setLogFilterCompany] = useState('');
+  const [companyPage, setCompanyPage] = useState(1);
+  const [logPage, setLogPage] = useState(1);
 
-  const fetchCompanies = useCallback(() => api.getCollection<DeliveryCompany>('/admin/delivery-companies'), [api]);
-  const fetchVariables = useCallback(() => api.getCollection<DeliveryVariable>('/admin/delivery/variables'), [api]);
+  const fetchCompanies = useCallback(() => api.getCollection<DeliveryCompany>(`/admin/delivery-companies?page=${companyPage}&itemsPerPage=${PAGE_SIZE}`), [api, companyPage]);
+  const fetchCompanyOptions = useCallback(() => api.getCollection<DeliveryCompany>('/admin/delivery-companies?itemsPerPage=100'), [api]);
+  const fetchVariables = useCallback(() => api.getCollection<DeliveryVariable>('/admin/delivery/variables?itemsPerPage=100'), [api]);
   const fetchLogs = useCallback(
-    () => api.getCollection<DeliveryApiLog>(`/admin/delivery/api-logs${logFilterCompany ? `?companyId=${logFilterCompany}` : ''}`),
-    [api, logFilterCompany],
+    () => api.getCollection<DeliveryApiLog>(`/admin/delivery/api-logs?page=${logPage}&itemsPerPage=${PAGE_SIZE}${logFilterCompany ? `&companyId=${encodeURIComponent(logFilterCompany)}` : ''}`),
+    [api, logFilterCompany, logPage],
   );
 
-  const { data: companiesData, isLoading: companiesLoading, error: companiesError, refresh: refreshCompanies } = useApiData(fetchCompanies, [tab]);
+  const { data: companiesData, isLoading: companiesLoading, error: companiesError, refresh: refreshCompanies } = useApiData(fetchCompanies, [tab, companyPage]);
+  const { data: companyOptionsData } = useApiData(fetchCompanyOptions, [tab]);
   const { data: variablesData, isLoading: variablesLoading } = useApiData(fetchVariables, [tab]);
-  const { data: logsData, isLoading: logsLoading, error: logsError, refresh: refreshLogs } = useApiData(fetchLogs, [tab, logFilterCompany]);
+  const { data: logsData, isLoading: logsLoading, error: logsError, refresh: refreshLogs } = useApiData(fetchLogs, [tab, logFilterCompany, logPage]);
 
   const companies = companiesData?.member ?? [];
+  const companyOptions = companyOptionsData?.member ?? companies;
   const variables = variablesData?.member ?? [];
   const logs = logsData?.member ?? [];
+  const companyTotalPages = Math.max(1, Math.ceil((companiesData?.totalItems ?? 0) / PAGE_SIZE));
+  const logTotalPages = Math.max(1, Math.ceil((logsData?.totalItems ?? 0) / PAGE_SIZE));
 
   const variablesByCategory = variables.reduce((acc, v) => {
     (acc[v.category] ??= []).push(v);
@@ -391,7 +400,7 @@ export function DeliveryAdminPanel({ getAccessToken }: { getAccessToken: () => s
           <CardBody>
             {companiesLoading ? <LoadingState /> : companiesError ? <ErrorState message={companiesError} onRetry={refreshCompanies} /> : companies.length === 0 ? <EmptyState /> : (
               <div style={{ display: 'grid', gap: 8 }}>
-                {companies.map((company) => (
+                 {companies.map((company) => (
                   <div key={company.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: '1px solid var(--bo-border)', borderRadius: 8, flexWrap: 'wrap', gap: 8 }}>
                     <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                       {company.logoUrl && <img src={company.logoUrl} alt={company.name} style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'contain' }} />}
@@ -412,8 +421,9 @@ export function DeliveryAdminPanel({ getAccessToken }: { getAccessToken: () => s
                       <Button variant="danger" size="sm" onClick={() => setDeleteCompanyId(company.id)}>Suppr.</Button>
                     </div>
                   </div>
-                ))}
-              </div>
+                 ))}
+                 <Pagination page={companyPage} totalPages={companyTotalPages} onPageChange={setCompanyPage} />
+               </div>
             )}
           </CardBody>
         </Card>
@@ -424,16 +434,16 @@ export function DeliveryAdminPanel({ getAccessToken }: { getAccessToken: () => s
           <CardHeader>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <span>Logs des appels API transporteurs</span>
-              <Select style={{ maxWidth: 240 }} value={logFilterCompany} onChange={(e) => setLogFilterCompany(e.target.value)}>
+               <Select style={{ maxWidth: 240 }} value={logFilterCompany} onChange={(e) => { setLogFilterCompany(e.target.value); setLogPage(1); }}>
                 <option value="">Toutes les sociétés</option>
-                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                 {companyOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
             </div>
           </CardHeader>
           <CardBody>
             {logsLoading ? <LoadingState /> : logsError ? <ErrorState message={logsError} onRetry={refreshLogs} /> : logs.length === 0 ? <EmptyState /> : (
               <div style={{ display: 'grid', gap: 6 }}>
-                {logs.map((log) => (
+                 {logs.map((log) => (
                   <div key={log.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', border: '1px solid var(--bo-border)', borderRadius: 8, flexWrap: 'wrap', gap: 8 }}>
                     <div>
                       <strong>{log.deliveryCompanyName}</strong>{log.endpointType ? ` — ${log.endpointType}` : ''}
@@ -448,8 +458,9 @@ export function DeliveryAdminPanel({ getAccessToken }: { getAccessToken: () => s
                       <span>{new Date(log.createdAt).toLocaleString('fr-FR')}</span>
                     </div>
                   </div>
-                ))}
-              </div>
+                 ))}
+                 <Pagination page={logPage} totalPages={logTotalPages} onPageChange={setLogPage} />
+               </div>
             )}
           </CardBody>
         </Card>

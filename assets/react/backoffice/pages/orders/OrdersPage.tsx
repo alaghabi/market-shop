@@ -91,8 +91,14 @@ export function OrdersPage({ getAccessToken, userRoles = [] }: { getAccessToken:
 
   const columns = [
     {
-      key: 'id', label: 'Commande',
-      render: (o: Order) => <strong style={{ fontSize: 13 }}>#{o.id.slice(0, 8)}</strong>,
+      key: 'items', label: 'Produit(s)',
+      render: (o: Order) => {
+        const item = o.items?.[0];
+        return item ? <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {item.productImage ? <img src={item.productImage} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--bo-border)' }} /> : <div aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 6, background: 'var(--bo-surface)', border: '1px solid var(--bo-border)' }} />}
+          <span>{item.productName ?? item.productId ?? 'Produit'}{(o.items?.length ?? 0) > 1 ? ` +${(o.items?.length ?? 0) - 1}` : ''}</span>
+        </div> : <span style={{ color: 'var(--bo-text-muted)' }}>—</span>;
+      },
     },
     {
       key: 'customerName', label: 'Client', sortable: true,
@@ -169,7 +175,7 @@ export function OrdersPage({ getAccessToken, userRoles = [] }: { getAccessToken:
         </CardBody>
       </Card>
 
-      <Modal isOpen={!!detailOrder} onClose={() => setDetailOrder(null)} title={`Commande #${detailOrder?.id?.slice(0, 8) ?? ''}`} width="560px">
+       <Modal isOpen={!!detailOrder} onClose={() => setDetailOrder(null)} title={`Commande #${detailOrder?.id ?? ''}`} width="560px">
         {detailOrder && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ borderBottom: '1px solid var(--bo-border)', paddingBottom: 16 }}>
@@ -209,9 +215,10 @@ export function OrdersPage({ getAccessToken, userRoles = [] }: { getAccessToken:
               {detailOrder.items?.length ? (
                 <div className="bo-table-wrapper" style={{ marginTop: 10 }}>
                   <table className="bo-table">
-                    <thead><tr><th>Produit</th><th>Référence</th><th>Qté</th><th>Prix unitaire</th><th>Total</th></tr></thead>
+                    <thead><tr><th>Image</th><th>Produit</th><th>Référence</th><th>Qté</th><th>Prix unitaire</th><th>Total</th></tr></thead>
                     <tbody>{detailOrder.items.map((item, index) => (
                       <tr key={`${item.productId ?? item.productName ?? 'item'}-${index}`}>
+                        <td>{item.productImage ? <img src={item.productImage} alt={item.productName ?? 'Produit'} style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--bo-border)' }} /> : <div aria-hidden="true" style={{ width: 48, height: 48, borderRadius: 8, background: 'var(--bo-surface)', border: '1px solid var(--bo-border)' }} />}</td>
                         <td>{item.productName ?? item.productId ?? 'Produit'}</td>
                         <td>{item.sku ?? '—'}</td>
                         <td>{item.quantity}</td>
@@ -246,7 +253,7 @@ export function OrdersPage({ getAccessToken, userRoles = [] }: { getAccessToken:
         onClose={() => { if (!actionOrderId) setOrderToReject(null); }}
         onConfirm={() => { if (orderToReject) void updateOrderStatus(orderToReject, 'cancelled'); }}
         title="Refuser la commande"
-        message={orderToReject ? `Refuser la commande #${orderToReject.id.slice(0, 8)} ?` : ''}
+         message={orderToReject ? `Refuser la commande #${orderToReject.id} ?` : ''}
         confirmLabel="Refuser"
         danger
         isLoading={!!actionOrderId}

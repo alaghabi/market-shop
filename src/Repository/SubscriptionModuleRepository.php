@@ -22,6 +22,22 @@ final class SubscriptionModuleRepository extends ServiceEntityRepository
         return $this->findBy(['plan' => $plan], ['createdAt' => 'ASC']);
     }
 
+    /** @return array{items: list<SubscriptionModule>, total: int} */
+    public function findForBackoffice(SubscriptionPlan $plan, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('subscriptionModule')
+            ->andWhere('subscriptionModule.plan = :plan')
+            ->setParameter('plan', $plan);
+        $countQuery = clone $query;
+        $total = (int) $countQuery->resetDQLPart('select')->resetDQLPart('orderBy')
+            ->select('COUNT(subscriptionModule.id)')->getQuery()->getSingleScalarResult();
+        $items = $query->orderBy('subscriptionModule.createdAt', 'ASC')->addOrderBy('subscriptionModule.id', 'ASC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)->setMaxResults($itemsPerPage)
+            ->getQuery()->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
     public function findOneByPlanAndModule(SubscriptionPlan $plan, SubscriptionPlanModule $module): ?SubscriptionModule
     {
         return $this->findOneBy(['plan' => $plan, 'module' => $module]);

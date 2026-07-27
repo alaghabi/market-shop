@@ -4,11 +4,15 @@ namespace App\State\Delivery;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Delivery\BoutiqueDeliveryAccountOutput;
 use App\Entity\Boutique;
 use App\Repository\BoutiqueDeliveryAccountRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
 use App\State\Common\BoutiqueAwareProviderTrait;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class BoutiqueDeliveryAccountProvider implements ProviderInterface
@@ -18,19 +22,24 @@ final class BoutiqueDeliveryAccountProvider implements ProviderInterface
     public function __construct(
         private readonly BoutiqueDeliveryAccountRepository $repository,
         private readonly BoutiqueContext $context,
+        private readonly BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return array<BoutiqueDeliveryAccountOutput>|BoutiqueDeliveryAccountOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|BoutiqueDeliveryAccountOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|BoutiqueDeliveryAccountOutput|null
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $boutique = $this->resolveBoutiqueFromRequest($context);
         if (!$boutique instanceof Boutique) {
             throw new NotFoundHttpException('Boutique not found');
         }
 
         if (!$this->context->canAccessBoutique($boutique)) {
-            return null;
+            return isset($uriVariables['id'])
+                ? null
+                : new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
         }
 
         if (isset($uriVariables['id'])) {
@@ -42,7 +51,18 @@ final class BoutiqueDeliveryAccountProvider implements ProviderInterface
             return $this->toOutput($entity);
         }
 
-        return array_map([$this, 'toOutput'], $this->repository->findByBoutique($boutique));
+        $result = $this->repository->findForBackoffice(
+            $boutique,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
+
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function toOutput(object $entity): BoutiqueDeliveryAccountOutput

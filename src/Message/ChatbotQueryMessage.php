@@ -8,6 +8,7 @@ final class ChatbotQueryMessage
         private readonly string $conversationId,
         private readonly string $boutiqueId,
         private readonly string $userMessage,
+        private readonly string $userMessageId,
     ) {
     }
 
@@ -24,5 +25,10 @@ final class ChatbotQueryMessage
     public function getUserMessage(): string
     {
         return $this->userMessage;
+    }
+
+    public function getUserMessageId(): string
+    {
+        return $this->userMessageId;
     }
 }

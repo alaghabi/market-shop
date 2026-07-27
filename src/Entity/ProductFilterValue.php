@@ -14,13 +14,13 @@ class ProductFilterValue extends AbstractEntity
     private ProductFilter $filter;
 
     #[ORM\ManyToOne(targetEntity: Product::class, inversedBy: 'filterValues')]
-    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
-    private Product $product;
+    #[ORM\JoinColumn(nullable: true, onDelete: 'CASCADE')]
+    private ?Product $product;
 
     #[ORM\Column(length: 120)]
     private string $value;
 
-    public function __construct(ProductFilter $filter, Product $product, string $value)
+    public function __construct(ProductFilter $filter, ?Product $product, string $value)
     {
         parent::__construct();
         $this->filter = $filter;
@@ -33,7 +33,7 @@ class ProductFilterValue extends AbstractEntity
         return $this->filter;
     }
 
-    public function getProduct(): Product
+    public function getProduct(): ?Product
     {
         return $this->product;
     }

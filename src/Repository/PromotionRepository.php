@@ -30,6 +30,45 @@ final class PromotionRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /** @return array{items: list<Promotion>, total: int} */
+    public function findForBackoffice(?Boutique $boutique, bool $activeOnly, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('promotion')
+            ->andWhere('promotion.deletedAt IS NULL');
+
+        if ($boutique instanceof Boutique) {
+            $query->andWhere('promotion.boutique = :boutique')
+                ->setParameter('boutique', $boutique);
+        }
+
+        if ($activeOnly) {
+            $query
+                ->andWhere('promotion.active = true')
+                ->andWhere('promotion.startsAt <= :now')
+                ->andWhere('promotion.endsAt IS NULL OR promotion.endsAt >= :now')
+                ->setParameter('now', new \DateTimeImmutable());
+        }
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(promotion.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('promotion.priority', 'DESC')
+            ->addOrderBy('promotion.name', 'ASC')
+            ->addOrderBy('promotion.id', 'ASC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
     /** @return list<Promotion> */
     public function findActiveByBoutique(Boutique $boutique): array
     {

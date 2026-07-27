@@ -8,6 +8,7 @@ import { Modal } from '../../components/Modal';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { FormField, Input, Select, Textarea } from '../../components/FormField';
 import { useNotification } from '../../hooks/useNotification';
+import { Pagination } from '../../components/Pagination';
 
 type Extension = {
   id: string;
@@ -71,6 +72,7 @@ const emptyExtensionForm: ExtensionForm = {
 const emptyQuotaForm: QuotaForm = { code: '', name: '', description: '', unit: '', category: '', priceTnd: '0', isActive: true };
 
 type Tab = 'stats' | 'extensions' | 'quotas' | 'requests';
+const PAGE_SIZE = 20;
 
 export function ExtensionsAdminPanel({ getAccessToken }: { getAccessToken: () => string | null }) {
   const api = useApiClient(getAccessToken);
@@ -95,24 +97,33 @@ export function ExtensionsAdminPanel({ getAccessToken }: { getAccessToken: () =>
   const [decisionId, setDecisionId] = useState<string | null>(null);
   const [decisionAction, setDecisionAction] = useState<'approve' | 'reject' | 'suspend' | null>(null);
   const [decisionComment, setDecisionComment] = useState('');
+  const [extensionPage, setExtensionPage] = useState(1);
+  const [quotaPage, setQuotaPage] = useState(1);
+  const [requestPage, setRequestPage] = useState(1);
 
   const fetchStats = useCallback(() => api.get<Stats>('/admin/subscription/stats'), [api]);
-  const fetchExtensions = useCallback(() => api.getCollection<Extension>('/admin/extensions'), [api]);
-  const fetchQuotas = useCallback(() => api.getCollection<QuotaDefinition>('/admin/quota-definitions'), [api]);
-  const fetchRequests = useCallback(() => api.getCollection<ExtensionRequestItem>('/admin/extension-requests'), [api]);
-  const fetchModules = useCallback(() => api.getCollection<ModuleDefinition>('/admin/platform-modules'), [api]);
-  const fetchThemes = useCallback(() => api.getCollection<ThemeDefinition>('/admin/themes'), [api]);
+  const fetchExtensions = useCallback(() => api.getCollection<Extension>(`/admin/extensions?page=${extensionPage}&itemsPerPage=${PAGE_SIZE}`), [api, extensionPage]);
+  const fetchQuotas = useCallback(() => api.getCollection<QuotaDefinition>(`/admin/quota-definitions?page=${quotaPage}&itemsPerPage=${PAGE_SIZE}`), [api, quotaPage]);
+  const fetchQuotaOptions = useCallback(() => api.getCollection<QuotaDefinition>('/admin/quota-definitions?itemsPerPage=100'), [api]);
+  const fetchRequests = useCallback(() => api.getCollection<ExtensionRequestItem>(`/admin/extension-requests?page=${requestPage}&itemsPerPage=${PAGE_SIZE}`), [api, requestPage]);
+  const fetchModules = useCallback(() => api.getCollection<ModuleDefinition>('/admin/platform-modules?itemsPerPage=100'), [api]);
+  const fetchThemes = useCallback(() => api.getCollection<ThemeDefinition>('/admin/themes?itemsPerPage=100'), [api]);
 
   const { data: stats, isLoading: statsLoading, error: statsError, refresh: refreshStats } = useApiData(fetchStats, [tab]);
-  const { data: extensions, isLoading: extLoading, error: extError, refresh: refreshExtensions } = useApiData(fetchExtensions, [tab]);
-  const { data: quotas, isLoading: quotaLoading, error: quotaError, refresh: refreshQuotas } = useApiData(fetchQuotas, [tab]);
-  const { data: requestsData, isLoading: reqLoading, error: reqError, refresh: refreshRequests } = useApiData(fetchRequests, [tab]);
+  const { data: extensions, isLoading: extLoading, error: extError, refresh: refreshExtensions } = useApiData(fetchExtensions, [tab, extensionPage]);
+  const { data: quotas, isLoading: quotaLoading, error: quotaError, refresh: refreshQuotas } = useApiData(fetchQuotas, [tab, quotaPage]);
+  const { data: quotaOptionsData } = useApiData(fetchQuotaOptions, [tab]);
+  const { data: requestsData, isLoading: reqLoading, error: reqError, refresh: refreshRequests } = useApiData(fetchRequests, [tab, requestPage]);
   const { data: modulesData } = useApiData(fetchModules, [tab]);
   const { data: themesData } = useApiData(fetchThemes, [tab]);
 
   const extensionsList = extensions?.member ?? [];
   const quotasList = quotas?.member ?? [];
+  const quotaOptions = quotaOptionsData?.member ?? quotasList;
   const requestsList = requestsData?.member ?? [];
+  const extensionTotalPages = Math.max(1, Math.ceil((extensions?.totalItems ?? 0) / PAGE_SIZE));
+  const quotaTotalPages = Math.max(1, Math.ceil((quotas?.totalItems ?? 0) / PAGE_SIZE));
+  const requestTotalPages = Math.max(1, Math.ceil((requestsData?.totalItems ?? 0) / PAGE_SIZE));
   const moduleOptions = modulesData?.member ?? [];
   const themeOptions = (themesData?.member ?? []).filter((theme) => theme.isActive);
   const targetOptions = extForm.type === 'module'
@@ -120,12 +131,12 @@ export function ExtensionsAdminPanel({ getAccessToken }: { getAccessToken: () =>
     : extForm.type === 'theme'
       ? themeOptions.map((theme) => ({ code: theme.code, name: theme.name }))
       : extForm.type === 'quota_boost'
-        ? quotasList.filter((quota) => quota.isActive).map((quota) => ({ code: quota.code, name: quota.name }))
+         ? quotaOptions.filter((quota) => quota.isActive).map((quota) => ({ code: quota.code, name: quota.name }))
         : moduleOptions.map((module) => ({ code: module.moduleCode, name: module.moduleName }));
   const targetName = new Map([
     ...moduleOptions.map((module) => [module.moduleCode, module.moduleName] as const),
     ...themeOptions.map((theme) => [theme.code, theme.name] as const),
-    ...quotasList.map((quota) => [quota.code, quota.name] as const),
+     ...quotaOptions.map((quota) => [quota.code, quota.name] as const),
   ]);
 
   const openCreateExt = () => { setEditingExt(null); setExtForm(emptyExtensionForm); setExtModalOpen(true); };
@@ -318,7 +329,7 @@ export function ExtensionsAdminPanel({ getAccessToken }: { getAccessToken: () =>
           <CardBody>
             {extLoading ? <LoadingState /> : extError ? <ErrorState message={extError} onRetry={refreshExtensions} /> : extensionsList.length === 0 ? <EmptyState /> : (
               <div style={{ display: 'grid', gap: 8 }}>
-                {extensionsList.map((ext) => (
+                 {extensionsList.map((ext) => (
                   <div key={ext.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: '1px solid var(--bo-border)', borderRadius: 8 }}>
                     <div>
                       <strong>{ext.name}</strong> <span style={{ fontSize: 12, color: 'var(--bo-text-muted)' }}>({ext.code})</span>
@@ -333,8 +344,9 @@ export function ExtensionsAdminPanel({ getAccessToken }: { getAccessToken: () =>
                       <Button variant="danger" size="sm" onClick={() => setDeleteExtId(ext.id)}>Suppr.</Button>
                     </div>
                   </div>
-                ))}
-              </div>
+                 ))}
+                 <Pagination page={extensionPage} totalPages={extensionTotalPages} onPageChange={setExtensionPage} />
+               </div>
             )}
           </CardBody>
         </Card>
@@ -351,7 +363,7 @@ export function ExtensionsAdminPanel({ getAccessToken }: { getAccessToken: () =>
           <CardBody>
             {quotaLoading ? <LoadingState /> : quotaError ? <ErrorState message={quotaError} onRetry={refreshQuotas} /> : quotasList.length === 0 ? <EmptyState /> : (
               <div style={{ display: 'grid', gap: 8 }}>
-                {quotasList.map((quota) => (
+                 {quotasList.map((quota) => (
                   <div key={quota.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: '1px solid var(--bo-border)', borderRadius: 8 }}>
                     <div>
                       <strong>{quota.name}</strong> <span style={{ fontSize: 12, color: 'var(--bo-text-muted)' }}>({quota.code})</span>
@@ -364,8 +376,9 @@ export function ExtensionsAdminPanel({ getAccessToken }: { getAccessToken: () =>
                       <Button variant="danger" size="sm" onClick={() => setDeleteQuotaId(quota.id)}>Suppr.</Button>
                     </div>
                   </div>
-                ))}
-              </div>
+                 ))}
+                 <Pagination page={quotaPage} totalPages={quotaTotalPages} onPageChange={setQuotaPage} />
+               </div>
             )}
             <p style={{ fontSize: 12, color: 'var(--bo-text-muted)', marginTop: 12 }}>
               Les limites par plan (nombre de produits, employés, etc.) se configurent depuis la fiche de chaque plan d'abonnement.
@@ -380,7 +393,7 @@ export function ExtensionsAdminPanel({ getAccessToken }: { getAccessToken: () =>
           <CardBody>
             {reqLoading ? <LoadingState /> : reqError ? <ErrorState message={reqError} onRetry={refreshRequests} /> : requestsList.length === 0 ? <EmptyState /> : (
               <div style={{ display: 'grid', gap: 8 }}>
-                {requestsList.map((req) => {
+                 {requestsList.map((req) => {
                   const badge = statusBadge(req.status);
                   const actionable = ['awaiting_validation', 'paid', 'activated'].includes(req.status);
                   return (
@@ -406,8 +419,9 @@ export function ExtensionsAdminPanel({ getAccessToken }: { getAccessToken: () =>
                       </div>
                     </div>
                   );
-                })}
-              </div>
+                 })}
+                 <Pagination page={requestPage} totalPages={requestTotalPages} onPageChange={setRequestPage} />
+               </div>
             )}
           </CardBody>
         </Card>

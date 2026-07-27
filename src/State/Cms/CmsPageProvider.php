@@ -6,6 +6,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Cms\CmsBlockOutput;
 use App\Dto\Cms\CmsPageOutput;
 use App\Entity\CmsBlock;
@@ -13,7 +14,10 @@ use App\Entity\CmsPage;
 use App\Repository\BoutiqueRepository;
 use App\Repository\CmsPageRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Backoffice\BackofficeScopeResolver;
 use App\State\Common\BoutiqueAwareProviderTrait;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 
 /** @implements ProviderInterface<CmsPageOutput|CmsBlockOutput> */
 final readonly class CmsPageProvider implements ProviderInterface
@@ -24,15 +28,34 @@ final readonly class CmsPageProvider implements ProviderInterface
         private CmsPageRepository $pages,
         private BoutiqueRepository $boutiques,
         private BoutiqueContext $context,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|CmsPageOutput|CmsBlockOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|CmsPageOutput|CmsBlockOutput|null
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $boutique = $this->resolveBoutiqueFromRequest($context, $uriVariables);
+
+        if ('public_cms_page' === $operation->getName()) {
+            if (!$boutique) {
+                return null;
+            }
+
+            $page = $this->pages->findOneByBoutiqueAndSlug($boutique, (string) ($uriVariables['slug'] ?? ''));
+
+            return $page instanceof CmsPage && 'PUBLISHED' === $page->getStatus()->value
+                ? $this->toPageOutput($page)
+                : null;
+        }
+
         if (!$boutique) {
             if (!$this->context->isSuperAdmin()) {
-                return $operation instanceof Get ? null : [];
+                return $operation instanceof Get
+                    ? null
+                    : new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
             }
 
             if ($operation instanceof Get) {
@@ -41,18 +64,26 @@ final readonly class CmsPageProvider implements ProviderInterface
                 return $page instanceof CmsPage ? $this->toPageOutput($page) : null;
             }
 
-            return array_map(
-                [$this, 'toPageOutput'],
-                $this->pages->findBy([], ['sortOrder' => 'ASC', 'createdAt' => 'DESC']),
+            $result = $this->pages->findForBackoffice(
+                null,
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
+
+            return new BackofficePaginator(
+                array_map([$this, 'toPageOutput'], $result['items']),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+                $result['total'],
             );
         }
 
         if ($operation instanceof Get && isset($uriVariables['blockId'])) {
-            return $this->getBlockOutput($boutique, $uriVariables);
+            return $this->getBlockOutput($uriVariables);
         }
 
         if ($operation instanceof GetCollection && isset($uriVariables['id'])) {
-            return $this->getBlockCollectionOutput($boutique, $uriVariables);
+            return $this->getBlockCollectionOutput($boutique, $uriVariables, $pagination);
         }
 
         if ($operation instanceof Get) {
@@ -63,9 +94,17 @@ final readonly class CmsPageProvider implements ProviderInterface
                 : null;
         }
 
-        return array_map(
-            [$this, 'toPageOutput'],
-            $this->pages->findByBoutique($boutique),
+        $result = $this->pages->findForBackoffice(
+            $boutique,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
+
+        return new BackofficePaginator(
+            array_map([$this, 'toPageOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
         );
     }
 
@@ -83,17 +122,24 @@ final readonly class CmsPageProvider implements ProviderInterface
         return $block ? $this->toBlockOutput($block) : null;
     }
 
-    /** @return list<CmsBlockOutput> */
-    private function getBlockCollectionOutput(\App\Entity\Boutique $boutique, array $uriVariables): array
+    /** @param array{page: int, itemsPerPage: int} $pagination */
+    private function getBlockCollectionOutput(\App\Entity\Boutique $boutique, array $uriVariables, array $pagination): PaginatorInterface
     {
         $page = $this->pages->find((string) ($uriVariables['id'] ?? ''));
         if (!$page || (string) $page->getBoutique()->getId() !== (string) $boutique->getId()) {
-            return [];
+            return new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
         }
 
-        return array_map(
+        $blocks = array_map(
             [$this, 'toBlockOutput'],
             $page->getBlocks()->toArray(),
+        );
+
+        return new BackofficePaginator(
+            array_slice($blocks, ($pagination['page'] - 1) * $pagination['itemsPerPage'], $pagination['itemsPerPage']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            count($blocks),
         );
     }
 

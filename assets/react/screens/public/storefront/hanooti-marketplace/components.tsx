@@ -147,8 +147,8 @@ export function Metric({ label, value }: { label: string; value: string }) {
 }
 
 export function ContactLine({ icon, text, href }: { icon: ReactNode; text: string; href?: string }) {
-  const content = <span className="inline-flex items-center gap-3 rounded-2xl bg-white px-4 py-3 font-bold text-slate-700 shadow-sm">{icon}{text}</span>;
-  return href ? <a href={href}>{content}</a> : content;
+  const content = <span className="flex w-full min-w-0 items-start gap-3 rounded-2xl bg-white px-4 py-3 font-bold text-slate-700 shadow-sm"> <span className="mt-0.5 shrink-0">{icon}</span><span className="min-w-0 break-words">{text}</span></span>;
+  return href ? <a href={href} className="block w-full">{content}</a> : content;
 }
 
 export function Field({ label, type = 'text' }: { label: string; type?: string }) {

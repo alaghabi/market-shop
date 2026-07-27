@@ -36,6 +36,36 @@ final class ProductRepository extends ServiceEntityRepository
         return $this->findOneBy(['boutique' => $boutique, 'slug' => $identifier]);
     }
 
+    /** @return array{items: list<Product>, total: int} */
+    public function findForBackoffice(?Boutique $boutique, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('product')
+            ->andWhere('product.deletedAt IS NULL');
+
+        if ($boutique instanceof Boutique) {
+            $query->andWhere('product.boutique = :boutique')
+                ->setParameter('boutique', $boutique);
+        }
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(product.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('product.name', 'ASC')
+            ->addOrderBy('product.id', 'ASC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
     /** @return list<array{id: string, name: string, slug: string, boutiqueId: string, boutiqueName: string, viewsCount: int}> */
     public function findViewStats(?Boutique $boutique = null): array
     {

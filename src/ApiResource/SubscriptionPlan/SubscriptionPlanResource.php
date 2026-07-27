@@ -48,6 +48,7 @@ use App\State\SubscriptionPlan\SubscriptionPlanProvider;
             security: "is_granted('ROLE_SUPER_ADMIN')",
             input: SubscriptionPlanInput::class,
             output: SubscriptionPlanOutput::class,
+            provider: SubscriptionPlanProvider::class,
             processor: SubscriptionPlanProcessor::class,
         ),
         new Delete(

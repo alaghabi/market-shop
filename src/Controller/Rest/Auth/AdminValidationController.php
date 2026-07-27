@@ -9,7 +9,7 @@ use App\Repository\BoutiqueRepository;
 use App\Repository\UserRepository;
 use App\Repository\UserShopRepository;
 use App\Security\BoutiqueContext;
-use App\Service\NotificationService;
+use App\Service\Notification\BackofficeNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -23,7 +23,7 @@ final readonly class AdminValidationController
         private UserRepository $users,
         private BoutiqueRepository $boutiques,
         private UserShopRepository $userShops,
-        private NotificationService $notifications,
+        private BackofficeNotificationService $notifications,
         private Security $security,
         private BoutiqueContext $boutiqueContext,
     ) {
@@ -163,6 +163,17 @@ final readonly class AdminValidationController
 
         $this->entityManager->flush();
 
+        foreach ($managedShops as $userShop) {
+            $this->notifications->notifyUser(
+                $user,
+                $userShop->getBoutique(),
+                'boutique_admin_suspended',
+                'Accès administrateur suspendu',
+                sprintf('Votre accès administrateur à la boutique "%s" a été suspendu.', $userShop->getBoutique()->getName()),
+                'boutique_admin.suspended',
+            );
+        }
+
         return new JsonResponse(['message' => 'Utilisateur suspendu.', 'status' => $user->getStatus()->value]);
     }
 
@@ -196,6 +207,17 @@ final readonly class AdminValidationController
         }
 
         $this->entityManager->flush();
+
+        foreach ($managedShops as $userShop) {
+            $this->notifications->notifyUser(
+                $user,
+                $userShop->getBoutique(),
+                'boutique_admin_activated',
+                'Accès administrateur activé',
+                sprintf('Votre accès administrateur à la boutique "%s" a été activé.', $userShop->getBoutique()->getName()),
+                'boutique_admin.activated',
+            );
+        }
 
         return new JsonResponse(['message' => 'Utilisateur activé.', 'status' => $user->getStatus()->value]);
     }

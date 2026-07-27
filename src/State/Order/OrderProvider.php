@@ -7,33 +7,33 @@ use ApiPlatform\State\ProviderInterface;
 use App\Dto\Order\OrderOutput;
 use App\Entity\Boutique;
 use App\Entity\Order;
+use App\Entity\OrderItem;
+use App\Entity\ProductImage;
 use App\Enum\OrderStatus;
-use App\Repository\BoutiqueRepository;
 use App\Repository\OrderRepository;
 use App\Security\BoutiqueContext;
-use App\State\Common\BoutiqueAwareProviderTrait;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
 use Symfony\Component\HttpFoundation\Request;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 
 /** @implements ProviderInterface<OrderOutput> */
 final readonly class OrderProvider implements ProviderInterface
 {
-    use BoutiqueAwareProviderTrait;
-
     public function __construct(
         private OrderRepository $orders,
-        private BoutiqueRepository $boutiques,
         private BoutiqueContext $context,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return list<OrderOutput>|OrderOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|OrderOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|OrderOutput|null
     {
         $request = $context['request'] ?? null;
-        $boutique = $this->resolveBoutiqueFromRequest($context, $uriVariables);
+        $boutique = $this->scope->resolve($request instanceof Request ? $request : null);
 
         if (!$boutique instanceof Boutique && !$this->context->isSuperAdmin()) {
-            return [];
+            return new BackofficePaginator([], 1, 20, 0);
         }
 
         $orderId = $uriVariables['id'] ?? null;
@@ -69,10 +69,23 @@ final readonly class OrderProvider implements ProviderInterface
             }
         }
 
-        return array_map(
-            [$this, 'toOutput'],
-            $this->orders->findForBackoffice($boutique, $status, $search, $sortField, $sortDirection),
+        $pagination = $this->scope->pagination($request instanceof Request ? $request : null);
+        $result = $this->orders->findForBackoffice(
+            $boutique,
+            $status,
+            $search,
+            $sortField,
+            $sortDirection,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
         );
+
+        $items = array_map(
+            [$this, 'toOutput'],
+            $result['items'],
+        );
+
+        return new BackofficePaginator($items, $pagination['page'], $pagination['itemsPerPage'], $result['total']);
     }
 
     private function belongsToBoutique(Order $order, Boutique $boutique): bool
@@ -95,9 +108,10 @@ final readonly class OrderProvider implements ProviderInterface
         $output->discountCents = $order->getDiscountCents();
         $output->totalCents = $order->getTotalCents();
         $output->currency = $order->getCurrency();
-        $output->items = array_map(static fn ($item): array => [
+        $output->items = array_map(fn ($item): array => [
             'productId' => $item->getProduct() ? (string) $item->getProduct()->getId() : null,
             'productName' => $item->getProductName(),
+            'productImage' => $this->productImage($item),
             'sku' => $item->getSku(),
             'quantity' => $item->getQuantity(),
             'unitPriceCents' => $item->getUnitPriceCents(),
@@ -125,5 +139,19 @@ final readonly class OrderProvider implements ProviderInterface
         $output->updatedAt = $order->getCreatedAt();
 
         return $output;
+    }
+
+    private function productImage(OrderItem $item): ?string
+    {
+        $variantImage = $item->getVariant()?->getImage();
+        if (null !== $variantImage && '' !== $variantImage) {
+            return $variantImage;
+        }
+
+        $image = $item->getProduct()?->getImages()->first();
+
+        return $image instanceof ProductImage
+            ? ($image->getSmallUrl() ?: $image->getUrl())
+            : null;
     }
 }

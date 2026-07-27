@@ -1,4 +1,10 @@
-type ApiResponse<T> = { member?: T[]; items?: T[] } & T;
+type ApiResponse<T> = {
+  member?: T[];
+  items?: T[];
+  'hydra:member'?: T[];
+  totalItems?: number;
+  'hydra:totalItems'?: number;
+} & T;
 
 const storageKey = 'market-shop.auth';
 
@@ -51,7 +57,7 @@ export class ApiClient {
   }
 
   get<T>(path: string): Promise<T> {
-    return this.request<T>(path);
+    return this.request<T>(path, { cache: 'no-store' });
   }
 
   post<T>(path: string, body?: unknown): Promise<T> {
@@ -101,9 +107,14 @@ export class ApiClient {
   }
 
   getCollection<T>(path: string): Promise<{ member: T[]; totalItems: number }> {
-    return this.get<{ member?: T[]; totalItems?: number }>(path).then((res) => ({
-      member: res.member ?? (res as { items?: T[] }).items ?? [],
-      totalItems: res.totalItems ?? (res as { items?: T[] }).items?.length ?? 0,
+    return this.get<ApiResponse<T>>(path).then((res) => ({
+      member: res.member ?? res.items ?? res['hydra:member'] ?? [],
+      totalItems: res.totalItems
+        ?? res['hydra:totalItems']
+        ?? res.member?.length
+        ?? res.items?.length
+        ?? res['hydra:member']?.length
+        ?? 0,
     }));
   }
 

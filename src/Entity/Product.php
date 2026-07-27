@@ -20,6 +20,7 @@ class Product extends AbstractEntity implements SoftDeletableInterface
 
     /** @var Collection<int, ProductImage> */
     #[ORM\OneToMany(mappedBy: 'product', targetEntity: ProductImage::class, cascade: ['persist'], orphanRemoval: true)]
+    #[ORM\OrderBy(['position' => 'ASC'])]
     private Collection $images;
 
     /** @var Collection<int, ProductFilterValue> */

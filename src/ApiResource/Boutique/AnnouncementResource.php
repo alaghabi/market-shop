@@ -6,6 +6,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Link;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\State\Boutique\AnnouncementProvider;
@@ -16,6 +17,7 @@ use App\State\Boutique\AnnouncementProcessor;
     operations: [
         new GetCollection(
             uriTemplate: '/announcements',
+            itemUriTemplate: '/announcements/{id}',
             output: \App\Dto\Boutique\AnnouncementOutput::class,
             provider: AnnouncementProvider::class,
         ),
@@ -27,6 +29,9 @@ use App\State\Boutique\AnnouncementProcessor;
         ),
         new Get(
             uriTemplate: '/announcements/{id}',
+            uriVariables: [
+                'id' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id'),
+            ],
             output: \App\Dto\Boutique\AnnouncementOutput::class,
             provider: AnnouncementProvider::class,
         ),
@@ -44,6 +49,7 @@ use App\State\Boutique\AnnouncementProcessor;
         ),
         new GetCollection(
             uriTemplate: '/admin/announcements',
+            itemUriTemplate: '/announcements/{id}',
             security: "is_granted('ROLE_SUPER_ADMIN')",
             output: \App\Dto\Boutique\AnnouncementOutput::class,
             provider: AnnouncementProvider::class,

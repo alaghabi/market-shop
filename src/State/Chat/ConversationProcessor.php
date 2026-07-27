@@ -2,6 +2,7 @@
 
 namespace App\State\Chat;
 
+use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\ApiResource\Chat\ConversationResource;
@@ -11,6 +12,7 @@ use App\Entity\User;
 use App\Repository\BoutiqueRepository;
 use App\Repository\ConversationRepository;
 use App\Service\Chat\ChatAccessService;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -24,10 +26,11 @@ final class ConversationProcessor implements ProcessorInterface
         private BoutiqueRepository $boutiqueRepository,
         private TokenStorageInterface $tokenStorage,
         private ChatAccessService $access,
+        private EntityManagerInterface $em,
     ) {
     }
 
-    public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): ConversationResource
+    public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): ?ConversationResource
     {
         $id = $uriVariables['id'] ?? null;
 
@@ -40,6 +43,13 @@ final class ConversationProcessor implements ProcessorInterface
 
             if (!$this->access->canAccessConversation($conversation, $this->getGuestToken($context))) {
                 throw new AccessDeniedHttpException('Conversation access denied');
+            }
+
+            if ($operation instanceof Delete) {
+                $this->em->remove($conversation);
+                $this->em->flush();
+
+                return null;
             }
 
             $conversation->setActive($data->active ?? $conversation->isActive());

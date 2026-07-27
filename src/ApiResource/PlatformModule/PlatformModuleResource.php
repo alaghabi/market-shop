@@ -40,6 +40,7 @@ use App\State\PlatformModule\PlatformModuleProvider;
             security: "is_granted('ROLE_SUPER_ADMIN')",
             input: PlatformModuleInput::class,
             output: PlatformModuleOutput::class,
+            provider: PlatformModuleProvider::class,
             processor: PlatformModuleProcessor::class,
         ),
     ],

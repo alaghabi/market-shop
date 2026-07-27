@@ -5,14 +5,17 @@ namespace App\State\Promotion;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Promotion\PromotionOutput;
 use App\Entity\Promotion;
 use App\Repository\BoutiqueRepository;
 use App\Repository\PromotionRepository;
 use App\Security\BoutiqueContext;
-use App\Service\Marketing\MarketingCacheService;
+use App\Service\Backoffice\BackofficeScopeResolver;
 use App\State\Common\BoutiqueAwareProviderTrait;
+use App\State\Common\BackofficePaginator;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpFoundation\Request;
 
 /** @implements ProviderInterface<PromotionOutput> */
 final readonly class PromotionProvider implements ProviderInterface
@@ -24,17 +27,21 @@ final readonly class PromotionProvider implements ProviderInterface
         private BoutiqueRepository $boutiques,
         private BoutiqueContext $context,
         private Security $security,
-        private MarketingCacheService $cache,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return list<PromotionOutput>|PromotionOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|PromotionOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|PromotionOutput|null
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $boutique = $this->resolveBoutiqueFromRequest($context, $uriVariables);
         if (!$boutique) {
             if (!$this->context->isSuperAdmin()) {
-                return $operation instanceof Get ? null : [];
+                return $operation instanceof Get
+                    ? null
+                    : new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
             }
 
             if ($operation instanceof Get) {
@@ -43,7 +50,19 @@ final readonly class PromotionProvider implements ProviderInterface
                 return $promotion instanceof Promotion ? $this->toOutput($promotion) : null;
             }
 
-            return array_map([$this, 'toOutput'], $this->promotions->findBy([], ['createdAt' => 'DESC']));
+            $result = $this->promotions->findForBackoffice(
+                null,
+                false,
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
+
+            return new BackofficePaginator(
+                array_map([$this, 'toOutput'], $result['items']),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+                $result['total'],
+            );
         }
 
         $canManage = null !== $this->security->getUser() && $this->context->canAccessBoutique($boutique);
@@ -57,10 +76,27 @@ final readonly class PromotionProvider implements ProviderInterface
         }
 
         if ($canManage) {
-            return array_map([$this, 'toOutput'], $this->promotions->findByBoutique($boutique));
+            $result = $this->promotions->findForBackoffice(
+                $boutique,
+                false,
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
+        } else {
+            $result = $this->promotions->findForBackoffice(
+                $boutique,
+                true,
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
         }
 
-        return array_map([$this, 'fromCachedArray'], $this->cache->getPromotions((string) $boutique->getId()));
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function toOutput(Promotion $promotion): PromotionOutput

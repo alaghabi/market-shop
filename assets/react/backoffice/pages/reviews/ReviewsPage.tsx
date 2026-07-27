@@ -14,7 +14,12 @@ import { useNotification } from '../../hooks/useNotification';
 type Review = {
   id: string;
   boutiqueId?: string;
+  boutiqueName?: string | null;
   productId?: string;
+  productName?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  targetType?: 'product' | 'category' | 'boutique' | 'general';
   userId?: string;
   authorName: string;
   authorEmail?: string;
@@ -29,6 +34,20 @@ type Review = {
 
 const PAGE_SIZE = 20;
 
+function targetLabel(review: Review): string {
+  if (review.targetType === 'product' || review.productId) {
+    return `Produit : ${review.productName ?? review.productId ?? 'inconnu'}`;
+  }
+  if (review.targetType === 'category' || review.categoryId) {
+    return `Catégorie : ${review.categoryName ?? review.categoryId ?? 'inconnue'}`;
+  }
+  if (review.targetType === 'boutique' || review.boutiqueId) {
+    return `Boutique : ${review.boutiqueName ?? review.boutiqueId ?? 'inconnue'}`;
+  }
+
+  return 'Application Hanooti';
+}
+
 function StarRating({ rating }: { rating: number }) {
   return (
     <span style={{ color: 'var(--bo-warning)', whiteSpace: 'nowrap' }}>
@@ -41,8 +60,11 @@ export function ReviewsPage({ getAccessToken, userRoles = [] }: { getAccessToken
   const api = useApiClient(getAccessToken);
   const { showNotice } = useNotification();
   const isSuperAdmin = userRoles.includes('ROLE_SUPER_ADMIN');
+  const isBoutiqueAdmin = userRoles.includes('ROLE_BOUTIQUE_ADMIN');
+  const canDeleteReviews = isSuperAdmin || isBoutiqueAdmin;
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
+  const [reviewScope, setReviewScope] = useState<'all' | 'application'>('all');
   const [viewReview, setViewReview] = useState<Review | null>(null);
   const [reviewToDelete, setReviewToDelete] = useState<Review | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -53,10 +75,11 @@ export function ReviewsPage({ getAccessToken, userRoles = [] }: { getAccessToken
     params.set('itemsPerPage', String(PAGE_SIZE));
     params.set('order[createdAt]', 'desc');
     if (statusFilter) params.set('status', statusFilter);
-    return api.getCollection<Review>('/reviews?' + params.toString());
-  }, [api, page, statusFilter]);
+    const endpoint = reviewScope === 'application' && isSuperAdmin ? '/platform/reviews?' : '/reviews?';
+    return api.getCollection<Review>(endpoint + params.toString());
+  }, [api, isSuperAdmin, page, reviewScope, statusFilter]);
 
-  const { data, isLoading, error, refresh } = useApiData(fetchData, [page, statusFilter]);
+  const { data, isLoading, error, refresh } = useApiData(fetchData, [page, reviewScope, statusFilter]);
   const items = data?.member ?? [];
   const totalItems = data?.totalItems ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
@@ -111,6 +134,10 @@ export function ReviewsPage({ getAccessToken, userRoles = [] }: { getAccessToken
     },
     { key: 'rating', label: 'Note', render: (r: Review) => <StarRating rating={r.rating} /> },
     {
+      key: 'boutique', label: 'Boutique',
+      render: (r: Review) => <span style={{ color: 'var(--bo-text-secondary)' }}>{r.boutiqueName ?? 'Application Hanooti'}</span>,
+    },
+    {
       key: 'comment', label: 'Avis',
       render: (r: Review) => (
         <div style={{ maxWidth: 300 }}>
@@ -127,33 +154,12 @@ export function ReviewsPage({ getAccessToken, userRoles = [] }: { getAccessToken
       },
     },
     {
-      key: 'createdAt', label: 'Date',
-      render: (r: Review) => new Date(r.createdAt).toLocaleDateString('fr-FR'),
+      key: 'target', label: 'Cible',
+      render: (r: Review) => <Badge tone="neutral">{targetLabel(r)}</Badge>,
     },
     {
-      key: 'actions', label: '',
-      render: (r: Review) => (
-        <div style={{ display: 'flex', gap: 4 }}>
-          <Button size="sm" variant="secondary" onClick={(e) => { e?.stopPropagation?.(); setViewReview(r); }}>
-            Voir
-          </Button>
-          {r.status === 'pending' && (
-            <>
-              <Button size="sm" variant="secondary" onClick={(e) => { e?.stopPropagation?.(); handleApprove(r); }}>
-                ✓
-              </Button>
-              <Button size="sm" variant="secondary" style={{ color: 'var(--bo-error)' }} onClick={(e) => { e?.stopPropagation?.(); handleReject(r); }}>
-                ✗
-              </Button>
-            </>
-          )}
-          {isSuperAdmin && (
-            <Button size="sm" variant="danger" onClick={(e) => { e?.stopPropagation?.(); setReviewToDelete(r); }}>
-              Supprimer
-            </Button>
-          )}
-        </div>
-      ),
+      key: 'createdAt', label: 'Date',
+      render: (r: Review) => new Date(r.createdAt).toLocaleDateString('fr-FR'),
     },
   ];
 
@@ -164,6 +170,10 @@ export function ReviewsPage({ getAccessToken, userRoles = [] }: { getAccessToken
       <PageHeader title="Avis" description="Gestion des avis clients" />
       <Card>
         <CardHeader>
+          {isSuperAdmin && <select className="bo-input" style={{ maxWidth: 220 }} value={reviewScope} onChange={(event) => { setReviewScope(event.target.value as 'all' | 'application'); setPage(1); }}>
+            <option value="all">Tous les avis</option>
+            <option value="application">Application Hanooti</option>
+          </select>}
           <select
             className="bo-input"
             style={{ maxWidth: 200 }}
@@ -181,7 +191,21 @@ export function ReviewsPage({ getAccessToken, userRoles = [] }: { getAccessToken
             <EmptyState title="Aucun avis" message="Aucun avis client pour le moment." />
           ) : (
             <>
-              <Table columns={columns} data={items} />
+              <Table
+                columns={columns}
+                data={items}
+                onRowClick={setViewReview}
+                renderActions={(review) => (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <Button size="sm" variant="secondary" onClick={(event) => { event.stopPropagation(); setViewReview(review); }}>Voir</Button>
+                    {review.status === 'pending' && <>
+                      <Button size="sm" variant="secondary" onClick={(event) => { event.stopPropagation(); handleApprove(review); }}>✓</Button>
+                      <Button size="sm" variant="secondary" style={{ color: 'var(--bo-error)' }} onClick={(event) => { event.stopPropagation(); handleReject(review); }}>✗</Button>
+                    </>}
+                    {canDeleteReviews && <Button size="sm" variant="danger" onClick={(event) => { event.stopPropagation(); setReviewToDelete(review); }}>Supprimer</Button>}
+                  </div>
+                )}
+              />
               <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </>
           )}
@@ -204,15 +228,14 @@ export function ReviewsPage({ getAccessToken, userRoles = [] }: { getAccessToken
               )}
               <Button variant="danger" onClick={() => { setReviewToDelete(viewReview); setViewReview(null); }}>Supprimer</Button>
             </div>
-          ) : viewReview?.status === 'pending' ? (
+          ) : viewReview ? (
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <Button variant="secondary" onClick={() => setViewReview(null)}>Fermer</Button>
-              <Button onClick={() => { if (viewReview) { handleApprove(viewReview); setViewReview(null); } }}>
-                Approuver
-              </Button>
-              <Button variant="secondary" style={{ color: 'var(--bo-error)' }} onClick={() => { if (viewReview) { handleReject(viewReview); setViewReview(null); } }}>
-                Rejeter
-              </Button>
+              {viewReview.status === 'pending' && <>
+                <Button onClick={() => { handleApprove(viewReview); setViewReview(null); }}>Approuver</Button>
+                <Button variant="secondary" style={{ color: 'var(--bo-error)' }} onClick={() => { handleReject(viewReview); setViewReview(null); }}>Rejeter</Button>
+              </>}
+              {canDeleteReviews && <Button variant="danger" onClick={() => { setReviewToDelete(viewReview); setViewReview(null); }}>Supprimer</Button>}
             </div>
           ) : (
             <Button variant="secondary" onClick={() => setViewReview(null)}>Fermer</Button>
@@ -233,7 +256,10 @@ export function ReviewsPage({ getAccessToken, userRoles = [] }: { getAccessToken
               <div><strong>Auteur</strong><br /><span style={{ color: 'var(--bo-text-muted)' }}>{viewReview.authorName}</span></div>
               {viewReview.authorEmail && <div><strong>Email</strong><br /><span style={{ color: 'var(--bo-text-muted)' }}>{viewReview.authorEmail}</span></div>}
               <div><strong>Date</strong><br /><span style={{ color: 'var(--bo-text-muted)' }}>{new Date(viewReview.createdAt).toLocaleDateString('fr-FR')}</span></div>
-              {viewReview.productId && <div><strong>Produit ID</strong><br /><span style={{ color: 'var(--bo-text-muted)' }}>{viewReview.productId}</span></div>}
+              <div><strong>Cible</strong><br /><span style={{ color: 'var(--bo-text-muted)' }}>{targetLabel(viewReview)}</span></div>
+              {viewReview.boutiqueName && <div><strong>Boutique</strong><br /><span style={{ color: 'var(--bo-text-muted)' }}>{viewReview.boutiqueName}</span></div>}
+              {viewReview.productName && <div><strong>Produit</strong><br /><span style={{ color: 'var(--bo-text-muted)' }}>{viewReview.productName}</span></div>}
+              {viewReview.categoryName && <div><strong>Catégorie</strong><br /><span style={{ color: 'var(--bo-text-muted)' }}>{viewReview.categoryName}</span></div>}
             </div>
           </div>
         )}

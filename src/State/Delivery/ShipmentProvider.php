@@ -4,13 +4,17 @@ namespace App\State\Delivery;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Delivery\ShipmentOutput;
 use App\Entity\Boutique;
 use App\Entity\Shipment;
 use App\Repository\BoutiqueRepository;
 use App\Repository\ShipmentRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
 use App\State\Common\BoutiqueAwareProviderTrait;
+use Symfony\Component\HttpFoundation\Request;
 
 final class ShipmentProvider implements ProviderInterface
 {
@@ -20,21 +24,33 @@ final class ShipmentProvider implements ProviderInterface
         private readonly ShipmentRepository $repository,
         private readonly BoutiqueContext $context,
         private readonly BoutiqueRepository $boutiques,
+        private readonly BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return array<ShipmentOutput>|ShipmentOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|ShipmentOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|ShipmentOutput|null
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $operationName = $operation->getName() ?? '';
 
         if ('admin_list_shipments' === $operationName) {
-            return array_map($this->toOutput(...), $this->repository->findAllOrdered());
+            $result = $this->repository->findForBackoffice(null, $pagination['page'], $pagination['itemsPerPage']);
+
+            return new BackofficePaginator(
+                array_map($this->toOutput(...), $result['items']),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+                $result['total'],
+            );
         }
 
         $boutique = $this->resolveBoutiqueFromRequest($context, $uriVariables);
         if (!$boutique instanceof Boutique) {
-            return isset($uriVariables['id']) ? null : [];
+            return isset($uriVariables['id'])
+                ? null
+                : new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
         }
 
         if (isset($uriVariables['id'])) {
@@ -46,7 +62,18 @@ final class ShipmentProvider implements ProviderInterface
             return $this->toOutput($entity);
         }
 
-        return array_map($this->toOutput(...), $this->repository->findByBoutique($boutique));
+        $result = $this->repository->findForBackoffice(
+            $boutique,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
+
+        return new BackofficePaginator(
+            array_map($this->toOutput(...), $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     public function toOutput(Shipment $entity): ShipmentOutput

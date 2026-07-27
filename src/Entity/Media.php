@@ -187,17 +187,17 @@ class Media extends AbstractEntity
 
     public function getUrl(): string
     {
-        return sprintf('/%s', $this->path);
+        return sprintf('/uploads/%s', ltrim($this->path, '/'));
     }
 
     public function getThumbnailUrl(): ?string
     {
-        return null !== $this->thumbnailPath ? sprintf('/%s', $this->thumbnailPath) : null;
+        return null !== $this->thumbnailPath ? sprintf('/uploads/%s', ltrim($this->thumbnailPath, '/')) : null;
     }
 
     public function getCompressedUrl(): ?string
     {
-        return null !== $this->compressedPath ? sprintf('/%s', $this->compressedPath) : null;
+        return null !== $this->compressedPath ? sprintf('/uploads/%s', ltrim($this->compressedPath, '/')) : null;
     }
 
     private function touch(): void

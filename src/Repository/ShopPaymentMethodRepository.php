@@ -29,6 +29,41 @@ final class ShopPaymentMethodRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /** @return array{items: list<ShopPaymentMethod>, total: int} */
+    public function findForBackoffice(Boutique $boutique, bool $activeOnly, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('shopMethod')
+            ->innerJoin('shopMethod.paymentMethod', 'paymentMethod')
+            ->andWhere('shopMethod.boutique = :boutique')
+            ->setParameter('boutique', $boutique);
+
+        if ($activeOnly) {
+            $query
+                ->andWhere('shopMethod.isActive = true')
+                ->andWhere('paymentMethod.isActive = true')
+                ->andWhere('paymentMethod.isVisible = true');
+        }
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(shopMethod.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('shopMethod.displayOrder', 'ASC')
+            ->addOrderBy('paymentMethod.name', 'ASC')
+            ->addOrderBy('shopMethod.id', 'ASC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
     /** @return list<ShopPaymentMethod> */
     public function findActiveForBoutique(Boutique $boutique): array
     {

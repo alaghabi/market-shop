@@ -10,12 +10,14 @@ use App\Entity\DeliveryCompany;
 use App\Entity\DeliveryEndpoint;
 use App\Repository\DeliveryCompanyRepository;
 use App\Service\AppConfigService;
+use App\Service\Delivery\DeliveryCredentialFieldSchema;
 
 final class DeliveryCompanyProvider implements ProviderInterface
 {
     public function __construct(
         private readonly DeliveryCompanyRepository $repository,
         private readonly AppConfigService $appConfig,
+        private readonly DeliveryCredentialFieldSchema $credentialFields,
     ) {
     }
 
@@ -57,6 +59,7 @@ final class DeliveryCompanyProvider implements ProviderInterface
         $output->provider = $entity->getProvider();
         $output->authType = $entity->getAuthType()->value;
         $output->authConfig = $entity->getAuthConfig();
+        $output->credentialFields = $this->credentialFields->fieldsFor($entity);
         $output->mappingConfig = $entity->getMappingConfig();
         $output->parametersConfig = $entity->getParametersConfig();
         $output->logoUrl = $entity->getLogoUrl();

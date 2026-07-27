@@ -6,7 +6,12 @@ final class ReviewOutput
 {
     public string $id;
     public ?string $boutiqueId;
+    public ?string $boutiqueName = null;
     public ?string $productId;
+    public ?string $productName = null;
+    public ?string $categoryId = null;
+    public ?string $categoryName = null;
+    public string $targetType = 'general';
     public ?string $userId;
     public string $authorName;
     public ?string $authorEmail;

@@ -32,7 +32,7 @@ final readonly class MediaProcessor implements ProcessorInterface
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): ?MediaOutput
     {
-        unset($data, $context);
+        unset($data);
 
         $request = $context['request'] ?? null;
         $boutiqueId = $uriVariables['boutiqueId']

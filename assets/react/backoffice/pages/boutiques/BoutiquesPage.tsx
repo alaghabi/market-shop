@@ -7,6 +7,7 @@ import { Badge } from '../../components/Badge';
 import { LoadingState, ErrorState } from '../../components/States';
 import { PageHeader } from '../../layout/Shell';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Pagination } from '../../components/Pagination';
 import { frontOfficeUrl } from '../../utils/frontOfficeUrl';
 
 type BoutiqueSummary = {
@@ -21,12 +22,16 @@ type SubscriptionRequest = {
   subscriptionPlanName: string; status: string; requestedAt: string;
 };
 
+const PAGE_SIZE = 20;
+
 export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string | null }) {
   const api = useApiClient(getAccessToken);
   const { showNotice } = useNotification();
+  const [page, setPage] = useState(1);
+  const [requestsPage, setRequestsPage] = useState(1);
 
-  const fetchBoutiques = useCallback(() => api.getCollection<BoutiqueSummary>('/boutiques'), [api]);
-  const fetchRequests = useCallback(() => api.getCollection<SubscriptionRequest>('/admin/subscription-requests'), [api]);
+  const fetchBoutiques = useCallback(() => api.getCollection<BoutiqueSummary>(`/boutiques?page=${page}&itemsPerPage=${PAGE_SIZE}`), [api, page]);
+  const fetchRequests = useCallback(() => api.getCollection<SubscriptionRequest>(`/admin/subscription-requests?page=${requestsPage}&itemsPerPage=${PAGE_SIZE}`), [api, requestsPage]);
 
   const { data: boutiquesRes, isLoading, error, refresh } = useApiData(fetchBoutiques);
   const { data: requestsRes, refresh: refreshRequests } = useApiData(fetchRequests);
@@ -34,6 +39,8 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
   const boutiques = boutiquesRes?.member ?? [];
   const subscriptionRequests = requestsRes?.member ?? [];
   const pendingRequests = subscriptionRequests.filter((r) => r.status === 'pending');
+  const totalPages = Math.max(1, Math.ceil((boutiquesRes?.totalItems ?? 0) / PAGE_SIZE));
+  const requestsTotalPages = Math.max(1, Math.ceil((requestsRes?.totalItems ?? 0) / PAGE_SIZE));
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -103,7 +110,7 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
                 <p style={{ padding: 16, textAlign: 'center', color: 'var(--bo-text-muted)', fontSize: 14 }}>Aucune demande en attente.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {pendingRequests.map((r) => (
+                   {pendingRequests.map((r) => (
                     <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, border: '1px solid var(--bo-border)', background: 'var(--bo-surface)' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{r.boutiqueName}</div>
@@ -114,9 +121,10 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
                         <Button variant="ghost" size="sm" onClick={() => processRequest(r.id, 'approve')}>Accepter</Button>
                         <Button variant="ghost" size="sm" style={{ color: 'var(--bo-error)' }} onClick={() => processRequest(r.id, 'reject')}>Refuser</Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                     </div>
+                   ))}
+                   <Pagination page={requestsPage} totalPages={requestsTotalPages} onPageChange={setRequestsPage} />
+                 </div>
               )}
             </CardBody>
           </Card>
@@ -129,11 +137,11 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <input
                     type="text" placeholder="Nom, slug, email…" value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                     className="bo-input"
                     style={{ maxWidth: 220, padding: '6px 12px', fontSize: 13, borderRadius: 8, border: '1px solid var(--bo-border)' }}
                   />
-                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+                   <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
                     className="bo-input"
                     style={{ padding: '6px 12px', fontSize: 13, borderRadius: 8, border: '1px solid var(--bo-border)' }}
                   >
@@ -144,7 +152,7 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
                     <option value="rejected">Rejetées</option>
                     <option value="archived">Archivées</option>
                   </select>
-                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                   <select value={sortBy} onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
                     className="bo-input"
                     style={{ padding: '6px 12px', fontSize: 13, borderRadius: 8, border: '1px solid var(--bo-border)' }}
                   >
@@ -161,7 +169,7 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
                 <p style={{ padding: 24, textAlign: 'center', color: 'var(--bo-text-muted)', fontSize: 14 }}>Aucune boutique trouvée.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {filteredBoutiques.map((b) => (
+                   {filteredBoutiques.map((b) => (
                     <div key={b.id} style={{
                       display: 'flex', alignItems: 'center', gap: 12,
                       padding: '10px 14px', borderRadius: 10,
@@ -209,9 +217,10 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
                         )}
                         <Button variant="ghost" size="sm" style={{ color: 'var(--bo-error)' }} onClick={() => setShowDeleteConfirm(b.id)}>Supprimer</Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                     </div>
+                   ))}
+                   <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+                 </div>
               )}
             </CardBody>
           </Card>

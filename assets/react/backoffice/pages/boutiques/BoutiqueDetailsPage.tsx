@@ -21,6 +21,8 @@ type BoutiqueTarget = {
 };
 
 type BoutiqueSettings = {
+  logoUrl?: string | null;
+  coverImage?: string | null;
   shopName?: string | null;
   slogan?: string | null;
   description?: string | null;
@@ -354,6 +356,28 @@ export function BoutiqueDetailsPage({
               </Badge>
             </div>
           </div>
+
+          {(data.settings.logoUrl || data.settings.coverImage) && (
+            <Card>
+              <CardHeader>Identité visuelle</CardHeader>
+              <CardBody>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+                  {data.settings.logoUrl && (
+                    <div>
+                      <div style={{ color: 'var(--bo-text-muted)', fontSize: 12, marginBottom: 6 }}>Logo</div>
+                      <img src={data.settings.logoUrl} alt={`Logo ${boutique.name}`} style={{ width: 140, height: 140, borderRadius: 12, objectFit: 'contain', border: '1px solid var(--bo-border)', background: 'var(--bo-surface)' }} />
+                    </div>
+                  )}
+                  {data.settings.coverImage && (
+                    <div>
+                      <div style={{ color: 'var(--bo-text-muted)', fontSize: 12, marginBottom: 6 }}>Image de couverture</div>
+                      <img src={data.settings.coverImage} alt={`Couverture ${boutique.name}`} style={{ width: '100%', maxWidth: 420, height: 140, borderRadius: 12, objectFit: 'cover', border: '1px solid var(--bo-border)' }} />
+                    </div>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>Vue opérationnelle</CardHeader>

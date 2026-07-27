@@ -18,6 +18,7 @@ use App\Repository\SubscriptionRequestRepository;
 use App\Repository\UserRepository;
 use App\Security\BoutiqueContext;
 use App\Service\Audit\AuditLogService;
+use App\Service\Notification\BackofficeNotificationService;
 use App\Service\NotificationService;
 use App\Service\Subscription\SubscriptionQuotaReconciler;
 use App\State\Common\BoutiqueWriteResolverTrait;
@@ -37,6 +38,7 @@ final class SubscriptionRequestProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly BoutiqueContext $context,
         private readonly NotificationService $notifications,
+        private readonly BackofficeNotificationService $backofficeNotifications,
         private readonly AuditLogService $auditLog,
         private readonly UserRepository $users,
         private readonly SubscriptionExtensionReconciler $extensionReconciler,
@@ -126,7 +128,7 @@ final class SubscriptionRequestProcessor implements ProcessorInterface
         $this->em->persist($subscription);
         $this->em->flush();
 
-        $this->notifyBoutique($boutique, 'subscription_activated', 'Abonnement activé', sprintf('Votre abonnement "%s" est maintenant actif.', $plan->getName()));
+        $this->notifyBoutique($boutique, 'subscription_activated', 'Abonnement activé', sprintf('Votre abonnement "%s" est maintenant actif.', $plan->getName()), 'subscription.approved');
         $this->notifySuperAdmins('subscription_approved', 'Abonnement approuvé', sprintf('L\'abonnement "%s" a été activé pour %s.', $plan->getName(), $boutique->getName()));
         $this->audit($boutique, 'subscription_request.approved', $entity, [
             'planId' => (string) $plan->getId(),
@@ -145,7 +147,7 @@ final class SubscriptionRequestProcessor implements ProcessorInterface
         $this->em->flush();
 
         $boutique = $entity->getBoutique();
-        $this->notifyBoutique($boutique, 'subscription_rejected', 'Demande refusée', sprintf('Votre demande pour le plan "%s" a été refusée.', $entity->getSubscriptionPlan()->getName()));
+        $this->notifyBoutique($boutique, 'subscription_rejected', 'Demande refusée', sprintf('Votre demande pour le plan "%s" a été refusée.', $entity->getSubscriptionPlan()->getName()), 'subscription.rejected');
         $this->audit($boutique, 'subscription_request.rejected', $entity);
 
         return $this->toOutput($entity);
@@ -197,8 +199,14 @@ final class SubscriptionRequestProcessor implements ProcessorInterface
         return $entity;
     }
 
-    private function notifyBoutique(Boutique $boutique, string $type, string $title, string $message): void
+    private function notifyBoutique(Boutique $boutique, string $type, string $title, string $message, ?string $eventCode = null): void
     {
+        if (null !== $eventCode) {
+            $this->backofficeNotifications->notifyBoutiqueAdmins($boutique, $type, $title, $message, $eventCode);
+
+            return;
+        }
+
         $this->notifications->notify(null, $type, $title, $message, $boutique);
     }
 

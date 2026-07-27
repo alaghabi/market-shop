@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChatBox } from '../../chat/ChatBox';
-import { StorefrontTheme, type StoreBoutique, type StoreProduct } from './storefront/StorefrontTheme';
+import { StorefrontTemplate } from './storefront/StorefrontTemplate';
+import { type StoreAnnouncement, type StoreBoutique, type StoreProduct } from './storefront/StorefrontTheme';
 import { applyStorefrontTheme, resetStorefrontTheme } from '../../theme/storefrontThemeRoot';
 import { getStorefrontThemePreset } from '../../theme/themes';
 import { authHeaders, boutiqueQuery, isBoutiqueSubdomain, resolveBoutiqueSlug } from './boutiqueRouting';
@@ -47,9 +48,11 @@ type StorefrontBoutiqueResponse = {
   analyticsEnabled?: boolean;
   viewsEnabled?: boolean;
   customerAccountsEnabled?: boolean;
+  chatbotEnabled?: boolean;
   customersWithAccount?: number;
   customersWithoutAccount?: number;
   publicOrdersCount?: number;
+  productsCount?: number;
 };
 
 type ProductResponse = {
@@ -101,6 +104,34 @@ type FilterResponse = {
   values?: Array<{ id?: string; value?: string }>;
 };
 
+type AnnouncementResponse = {
+  id?: string;
+  content?: string;
+  priority?: number;
+  active?: boolean;
+  visible?: boolean;
+  displayType?: string;
+  title?: string | null;
+  subtitle?: string | null;
+  backgroundColor?: string | null;
+  textColor?: string | null;
+  borderColor?: string | null;
+  linkUrl?: string | null;
+  displayMode?: string;
+  position?: string;
+  displayPages?: string[];
+  categoryIds?: string[];
+  productIds?: string[];
+};
+
+type PromotionResponse = {
+  scope?: string;
+  productIds?: string[];
+  categoryIds?: string[];
+  active?: boolean;
+  currentlyActive?: boolean;
+};
+
 type CollectionResponse<T> = { member?: T[]; items?: T[] } | T[];
 
 export function StorefrontPage({ title, description }: { title: string; description: string }) {
@@ -109,6 +140,8 @@ export function StorefrontPage({ title, description }: { title: string; descript
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [categories, setCategories] = useState<StoreCategory[]>([]);
   const [filters, setFilters] = useState<StoreFilter[]>([]);
+  const [announcements, setAnnouncements] = useState<StoreAnnouncement[]>([]);
+  const [promotionRules, setPromotionRules] = useState<PromotionResponse[]>([]);
   const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -185,10 +218,12 @@ export function StorefrontPage({ title, description }: { title: string; descript
             wishlistEnabled: data.wishlistEnabled === true,
             analyticsEnabled: data.analyticsEnabled === true,
             viewsEnabled: data.viewsEnabled === true,
-           customerAccountsEnabled: data.customerAccountsEnabled !== false,
+            customerAccountsEnabled: data.customerAccountsEnabled !== false,
+            chatbotEnabled: data.chatbotEnabled === true,
            customersWithAccount: data.customersWithAccount ?? 0,
            customersWithoutAccount: data.customersWithoutAccount ?? 0,
-           publicOrdersCount: data.publicOrdersCount ?? 0,
+            publicOrdersCount: data.publicOrdersCount ?? 0,
+            productsCount: data.productsCount ?? 0,
          });
          if (data.wishlistEnabled === true) {
            fetch(`/api/favorites/products${boutiqueQuery(boutiqueSlug)}`, { headers, credentials: 'same-origin' })
@@ -228,8 +263,80 @@ export function StorefrontPage({ title, description }: { title: string; descript
         setFilters(deduplicateFilters(items.map(mapFilter).filter((filter): filter is StoreFilter => Boolean(filter))));
       })
       .catch(() => {});
+
+    fetch(`/api/announcements${boutiqueQuery(boutiqueSlug)}`, { headers })
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: CollectionResponse<AnnouncementResponse>) => {
+        const items = collectionItems(data);
+        setAnnouncements(items
+          .filter((item): item is AnnouncementResponse & { id: string; content: string } => Boolean(item.id && item.content?.trim()))
+          .filter((item) => {
+            const pages = item.displayPages ?? [];
+            const isHomeAnnouncement = pages.length === 0 || pages.includes('all') || pages.includes('home');
+            const isBoutiqueAnnouncement = (item.categoryIds ?? []).length === 0 && (item.productIds ?? []).length === 0;
+            const isTickerPosition = !item.position || ['HOME_TOP', 'HOME_MIDDLE', 'HOME_BOTTOM', 'TOP_PAGE', 'HEADER_TOP'].includes(item.position);
+            const isHomeSlider = item.displayType === 'HOME_SLIDER';
+            const isTopBar = item.displayType === 'TOP_BAR' || ['HEADER_TOP', 'TOP_PAGE'].includes(item.position ?? '');
+            const isVisible = item.active !== false && item.visible !== false;
+
+            return isVisible && isBoutiqueAnnouncement && ((isHomeSlider && isHomeAnnouncement && isTickerPosition) || (isTopBar && isHomeAnnouncement));
+          })
+          .map((item) => ({
+            id: item.id,
+            content: item.content,
+            priority: item.priority,
+            active: item.active,
+            visible: item.visible,
+            displayType: item.displayType,
+            title: item.title,
+            subtitle: item.subtitle,
+            backgroundColor: item.backgroundColor,
+            textColor: item.textColor,
+            borderColor: item.borderColor,
+            linkUrl: item.linkUrl,
+            displayMode: item.displayMode,
+            position: item.position,
+            displayPages: item.displayPages,
+            categoryIds: item.categoryIds,
+            productIds: item.productIds,
+          })));
+      })
+      .catch(() => setAnnouncements([]));
+
+    fetch(`/api/promotions${boutiqueQuery(boutiqueSlug)}`, { headers })
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: CollectionResponse<PromotionResponse>) => setPromotionRules(collectionItems(data)))
+      .catch(() => setPromotionRules([]));
     return resetStorefrontTheme;
   }, [boutiqueSlug]);
+
+  const promotedProductIds = useMemo(() => {
+    const promoted = new Set<string>();
+
+    promotionRules
+      .filter((promotion) => promotion.active !== false && promotion.currentlyActive !== false)
+      .forEach((promotion) => {
+        const scope = promotion.scope?.toLowerCase();
+        if ('global' === scope) {
+          products.forEach((product) => promoted.add(product.id));
+          return;
+        }
+
+        if ('product' === scope) {
+          (promotion.productIds ?? []).forEach((productId) => promoted.add(productId));
+          return;
+        }
+
+        if ('category' === scope) {
+          const categoryIds = new Set(promotion.categoryIds ?? []);
+          products
+            .filter((product) => [product.categoryId, ...(product.categoryIds ?? [])].some((id) => id && categoryIds.has(id)))
+            .forEach((product) => promoted.add(product.id));
+        }
+      });
+
+    return [...promoted];
+  }, [products, promotionRules]);
 
   if (!boutique && !loaded) {
     return (
@@ -290,8 +397,8 @@ export function StorefrontPage({ title, description }: { title: string; descript
 
   return (
     <>
-      <StorefrontTheme boutique={boutique} products={products} categories={categories} filters={filters} reviewsEnabled={boutique.reviewsEnabled === true} favoriteProductIds={favoriteProductIds} onToggleFavorite={(id) => { void toggleFavorite(id); }} onFavoritesRefresh={() => { void refreshFavoriteIds(); }} />
-      {boutique && localStorage.getItem(`hanooti_chat_enabled_${boutique.slug}`) !== 'false' && localStorage.getItem('hanooti_boutique_chat_enabled') !== 'false' && (
+        <StorefrontTemplate boutique={boutique} products={products} categories={categories} filters={filters} announcements={announcements} promotedProductIds={promotedProductIds} reviewsEnabled={boutique.reviewsEnabled === true} favoriteProductIds={favoriteProductIds} onToggleFavorite={(id) => { void toggleFavorite(id); }} onFavoritesRefresh={() => { void refreshFavoriteIds(); }} />
+      {boutique.chatbotEnabled === true && localStorage.getItem(`hanooti_chat_enabled_${boutique.slug}`) !== 'false' && localStorage.getItem('hanooti_boutique_chat_enabled') !== 'false' && (
         <ChatBox boutiqueId={boutique.id} apiBaseUrl="/api" primaryColor={boutique.primaryColor} />
       )}
     </>

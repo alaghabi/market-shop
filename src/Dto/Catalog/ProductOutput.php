@@ -43,7 +43,7 @@ final class ProductOutput
     public ?string $categorySlug;
     /** @var list<string> */
     public array $categoryIds = [];
-    /** @var list<array{url: string, smallUrl: ?string, largeUrl: ?string, alt: ?string}> */
+    /** @var list<array{url: string, smallUrl: ?string, largeUrl: ?string, alt: ?string, isDefault: bool}> */
     public array $images = [];
     /** @var list<array{type: string, filePath: string, position: int, altText: ?string, isPrimary: bool}> */
     public array $media = [];

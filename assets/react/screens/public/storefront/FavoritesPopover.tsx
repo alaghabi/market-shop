@@ -71,7 +71,8 @@ export function FavoritesPopover({ boutiqueSlug, favoriteCount: badgeCount = 0, 
     }
   }
 
-  const displayCount = open || items.length > 0 ? items.length : badgeCount;
+  // The parent owns the live badge count; the local list is only the modal snapshot.
+  const displayCount = badgeCount;
 
   return (
     <>

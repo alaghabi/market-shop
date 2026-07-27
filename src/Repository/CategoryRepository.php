@@ -22,6 +22,36 @@ final class CategoryRepository extends ServiceEntityRepository
         return $this->findBy(['boutique' => $boutique, 'deletedAt' => null], ['name' => 'ASC']);
     }
 
+    /** @return array{items: list<Category>, total: int} */
+    public function findForBackoffice(?Boutique $boutique, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('category')
+            ->andWhere('category.deletedAt IS NULL');
+
+        if ($boutique instanceof Boutique) {
+            $query->andWhere('category.boutique = :boutique')
+                ->setParameter('boutique', $boutique);
+        }
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(category.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('category.name', 'ASC')
+            ->addOrderBy('category.id', 'ASC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
     /** @return Category[] */
     public function findActiveByBoutique(Boutique $boutique): array
     {

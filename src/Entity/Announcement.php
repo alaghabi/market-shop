@@ -17,6 +17,7 @@ class Announcement extends AbstractEntity
     public const TYPE_BANNER = 'BANNER';
     public const TYPE_POPUP = 'POPUP';
     public const TYPE_SLIDER = 'SLIDER';
+    public const TYPE_HOME_SLIDER = 'HOME_SLIDER';
     public const TYPE_ALERT = 'ALERT';
     public const TYPE_INFO_MESSAGE = 'INFO_MESSAGE';
 

@@ -26,7 +26,10 @@ type BoutiqueItem = StorefrontThemeData & {
 
 type CartItem = {
   id: string;
+  productId: string | null;
   productName: string | null;
+  productSlug?: string | null;
+  productImage?: string | null;
   quantity: number;
   unitPriceCents: number;
   totalCents: number;
@@ -66,6 +69,11 @@ type CartOutput = {
   items: CartItem[];
 };
 
+type ProductPreview = {
+  slug?: string;
+  images?: Array<{ url?: string; smallUrl?: string; largeUrl?: string; isDefault?: boolean } | string>;
+};
+
 export function CartPage() {
   const boutiqueSlug = resolveBoutiqueSlug(/^\/boutiques\/([^/]+)\/cart/);
   const [boutique, setBoutique] = useState<BoutiqueItem | null>(null);
@@ -74,6 +82,34 @@ export function CartPage() {
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function enrichCart(payload: CartOutput): Promise<CartOutput> {
+    const productIds = Array.from(new Set(payload.items.map((item) => item.productId).filter((id): id is string => Boolean(id))));
+    const previews = await Promise.all(productIds.map(async (productId) => {
+      try {
+        const response = await fetch(`/api/products/${productId}${boutiqueQuery(boutiqueSlug)}`, { headers: authHeaders() });
+        if (!response.ok) return [productId, null] as const;
+        return [productId, await response.json() as ProductPreview] as const;
+      } catch {
+        return [productId, null] as const;
+      }
+    }));
+    const previewMap = new Map(previews);
+
+    return {
+      ...payload,
+      items: payload.items.map((item) => {
+        const preview = item.productId ? previewMap.get(item.productId) : null;
+        const firstImage = preview?.images?.find((image) => typeof image !== 'string' && image.isDefault) ?? preview?.images?.[0];
+
+        return {
+          ...item,
+          productSlug: preview?.slug ?? null,
+          productImage: typeof firstImage === 'string' ? firstImage : firstImage?.largeUrl ?? firstImage?.url ?? firstImage?.smallUrl ?? null,
+        };
+      }),
+    };
+  }
 
   useEffect(() => {
     if (!boutiqueSlug) return;
@@ -90,7 +126,8 @@ export function CartPage() {
         return fetch(`/api/cart${boutiqueQuery(boutiqueSlug)}`, { headers });
       })
       .then((response) => response && response.ok ? response.json() : null)
-      .then((payload: CartOutput | null) => {
+      .then((payload: CartOutput | null) => payload ? enrichCart(payload) : null)
+      .then((payload) => {
         if (payload) setCart(payload);
       })
       .catch(() => {});
@@ -121,7 +158,7 @@ export function CartPage() {
         headers: authHeaders(),
       });
       if (!refreshedCart.ok) throw new Error('Impossible de recharger le panier.');
-      setCart(await refreshedCart.json() as CartOutput);
+      setCart(await enrichCart(await refreshedCart.json() as CartOutput));
     } catch (removeError) {
       setError(removeError instanceof Error ? removeError.message : 'Impossible de supprimer cet article.');
     } finally {
@@ -149,9 +186,32 @@ export function CartPage() {
         headers: authHeaders(),
       });
       if (!refreshedCart.ok) throw new Error('Impossible de recharger le panier.');
-      setCart(await refreshedCart.json() as CartOutput);
+      setCart(await enrichCart(await refreshedCart.json() as CartOutput));
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'Impossible de modifier la quantité.');
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
+
+  const addVariantAsLine = async (item: CartItem, variantId: string | null) => {
+    if (!item.productId || !variantId || variantId === item.variantId) return;
+
+    setUpdatingItemId(item.id);
+    setError(null);
+    try {
+      const response = await fetch(`/api/cart/items${boutiqueQuery(boutiqueSlug)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ productId: item.productId, quantity: item.quantity, variantId }),
+      });
+      if (!response.ok) throw new Error('Impossible d’ajouter cette variante au panier.');
+
+      const refreshedCart = await fetch(`/api/cart${boutiqueQuery(boutiqueSlug)}`, { headers: authHeaders() });
+      if (!refreshedCart.ok) throw new Error('Impossible de recharger le panier.');
+      setCart(await enrichCart(await refreshedCart.json() as CartOutput));
+    } catch (variantError) {
+      setError(variantError instanceof Error ? variantError.message : 'Impossible d’ajouter cette variante au panier.');
     } finally {
       setUpdatingItemId(null);
     }
@@ -165,7 +225,7 @@ export function CartPage() {
     <main className="ds-shell min-h-screen bg-[color:var(--sf-bg,#f6f2eb)] text-[color:var(--sf-text,#171717)]">
       {boutique && <StorefrontHeader boutique={boutique as StoreBoutique} showCart={false} cartItems={cart?.items.map(i => ({ itemId: i.id, product: { id: i.id, name: i.productName ?? 'Produit', slug: '', priceCents: i.unitPriceCents, currency: currency, images: [] }, qty: i.quantity })) ?? []} favoriteCount={favoritesCount} />}
       <section className="ds-page py-8 md:py-12">
-        <div className="ds-grid ds-grid--split">
+        <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
           <Card>
             <div className="mb-5 flex items-center justify-between">
               <div>
@@ -186,13 +246,13 @@ export function CartPage() {
                   initial={{ opacity: 0, x: -12 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.05, duration: 0.3 }}
-                  className="flex items-center gap-4 rounded-2xl border border-[color:var(--sf-outline,#d8d0c4)] bg-[color:var(--sf-surface,#ffffff)] p-4"
+                  className="grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-2xl border border-[color:var(--sf-outline,#d8d0c4)] bg-[color:var(--sf-surface,#ffffff)] p-3 sm:flex sm:items-center sm:gap-4 sm:p-4"
                 >
-                  <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-[color:var(--sf-surface-muted,#ece5d9)] text-[color:var(--sf-accent,#111111)]">
-                    <FontAwesomeIcon icon={appIcons.products} />
-                  </div>
+                   <a href={boutiqueLink(`/products/${item.productSlug ?? item.productId ?? ''}`)} aria-label={`Voir ${item.productName ?? 'le produit'}`} className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[color:var(--sf-surface-muted,#ece5d9)] text-[color:var(--sf-accent,#111111)] transition-opacity hover:opacity-80 sm:h-20 sm:w-20">
+                     {item.productImage ? <ImageWithFallback src={item.productImage} alt={item.productName ?? 'Produit'} className="h-full w-full object-cover" /> : <FontAwesomeIcon icon={appIcons.products} />}
+                   </a>
                    <div className="flex-1">
-                     <strong>{item.productName ?? 'Produit'}</strong>
+                     <a href={boutiqueLink(`/products/${item.productSlug ?? item.productId ?? ''}`)} className="font-bold hover:underline">{item.productName ?? 'Produit'}</a>
                     {item.variantAttributes && item.variantAttributes.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1.5">
                         {item.variantAttributes.map((attribute) => (
@@ -208,11 +268,10 @@ export function CartPage() {
                         <VariantSelector
                           variants={item.availableVariants}
                           selectedAttributes={Object.fromEntries((item.variantAttributes ?? []).map((attribute) => [attribute.name, attribute.value]))}
-                          onSelect={(name, value) => {
-                            const nextVariantId = findVariantIdForAttribute(item, name, value);
-                            if (!nextVariantId) return;
-                            void updateQuantity(item.id, item.quantity, nextVariantId);
-                          }}
+                           onSelect={(name, value) => {
+                             const nextVariantId = findVariantIdForAttribute(item, name, value);
+                             void addVariantAsLine(item, nextVariantId);
+                           }}
                           idPrefix={item.id}
                           disabled={updatingItemId === item.id || removingItemId === item.id}
                         />
@@ -241,7 +300,7 @@ export function CartPage() {
                       </button>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="col-span-2 flex min-w-0 items-center justify-between gap-3 border-t border-[color:var(--sf-outline,#d8d0c4)] pt-3 sm:col-span-1 sm:block sm:border-t-0 sm:pt-0 sm:text-right">
                     <strong>{(item.totalCents / 100).toFixed(2)} {currency}</strong>
                     <p className="text-sm text-[color:var(--sf-text-muted,#6b6560)]">Sous-total</p>
                     <Button

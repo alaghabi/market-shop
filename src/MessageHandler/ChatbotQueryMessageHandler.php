@@ -42,6 +42,20 @@ final class ChatbotQueryMessageHandler
             return;
         }
 
+        $userMessage = $this->messageRepository->find($query->getUserMessageId());
+        if (!$userMessage instanceof Message || $userMessage->getConversation() !== $conversation) {
+            return;
+        }
+
+        // A Redis retry can happen after the bot row was persisted but before Mercure returned.
+        // Republish the existing response instead of generating and storing a duplicate.
+        $existingResponse = $this->messageRepository->findBotResponseAfter($userMessage);
+        if ($existingResponse instanceof Message) {
+            $this->mercurePublisher->publishMessage($existingResponse);
+
+            return;
+        }
+
         $conversationId = (string) $conversation->getId();
         $this->mercurePublisher->publishTyping($conversationId, 'bot');
 

@@ -5,9 +5,11 @@ namespace App\Repository;
 use App\Entity\Boutique;
 use App\Entity\User;
 use App\Entity\Order;
+use App\Enum\ProductStatus;
 use App\Enum\OrderStatus;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
+use Symfony\Component\Uid\Uuid;
 
 /** @extends ServiceEntityRepository<Order> */
 final class OrderRepository extends ServiceEntityRepository
@@ -79,6 +81,60 @@ final class OrderRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    public function findForPublicTracking(Boutique $boutique, string $reference): ?Order
+    {
+        $reference = ltrim(trim($reference), '#');
+        if (!Uuid::isValid($reference)) {
+            return null;
+        }
+
+        return $this->createQueryBuilder('o')
+            ->andWhere('o.id = :id')
+            ->andWhere('o.boutique = :boutique')
+            ->setParameter('id', Uuid::fromString($reference))
+            ->setParameter('boutique', $boutique)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /** @return array{productId: string, quantitySold: int}|null */
+    public function findMostOrderedProductSince(Boutique $boutique, \DateTimeImmutable $since): ?array
+    {
+        $result = $this->createQueryBuilder('o')
+            ->select('product.id AS productId, SUM(item.quantity) AS quantitySold')
+            ->innerJoin('o.items', 'item')
+            ->innerJoin('item.product', 'product')
+            ->andWhere('o.boutique = :boutique')
+            ->andWhere('o.createdAt >= :since')
+            ->andWhere('o.status IN (:statuses)')
+            ->andWhere('product.deletedAt IS NULL')
+            ->andWhere('product.status = :productStatus')
+            ->setParameter('boutique', $boutique)
+            ->setParameter('since', $since)
+            ->setParameter('statuses', [
+                OrderStatus::Paid,
+                OrderStatus::Completed,
+                OrderStatus::Shipped,
+                OrderStatus::Delivered,
+            ])
+            ->setParameter('productStatus', ProductStatus::Active)
+            ->groupBy('product.id')
+            ->orderBy('quantitySold', 'DESC')
+            ->addOrderBy('product.name', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        if (!is_array($result) || !isset($result['productId'])) {
+            return null;
+        }
+
+        return [
+            'productId' => (string) $result['productId'],
+            'quantitySold' => (int) $result['quantitySold'],
+        ];
+    }
+
     /** @return list<Order> */
     public function findDeliveryFailedForRetry(int $maxRetries = 5, int $retryIntervalSeconds = 3600): array
     {
@@ -98,15 +154,15 @@ final class OrderRepository extends ServiceEntityRepository
             ->getResult();
     }
 
-    /**
-     * @return list<Order>
-     */
+    /** @return array{items: list<Order>, total: int} */
     public function findForBackoffice(
         ?Boutique $boutique = null,
         ?OrderStatus $status = null,
         ?string $search = null,
         string $sortField = 'createdAt',
         string $sortDirection = 'DESC',
+        int $page = 1,
+        int $itemsPerPage = 20,
     ): array {
         $query = $this->createQueryBuilder('o');
 
@@ -129,9 +185,22 @@ final class OrderRepository extends ServiceEntityRepository
         $sortField = in_array($sortField, $allowedSortFields, true) ? $sortField : 'createdAt';
         $sortDirection = 'ASC' === strtoupper($sortDirection) ? 'ASC' : 'DESC';
 
-        return $query
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(o.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
             ->orderBy('o.'.$sortField, $sortDirection)
+            ->addOrderBy('o.id', $sortDirection)
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
             ->getQuery()
             ->getResult();
+
+        return ['items' => $items, 'total' => $total];
     }
 }

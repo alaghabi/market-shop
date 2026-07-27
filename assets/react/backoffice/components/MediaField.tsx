@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { FormField } from './FormField';
 import { getStoredAccessToken } from '../../auth/getStoredAccessToken';
 
@@ -9,7 +9,10 @@ type MediaFieldProps = {
   hint?: string;
   accept?: string;
   maxSizeMb?: number;
+  boutiqueId?: string;
+  context?: string;
   boutiqueSlug?: string;
+  disabled?: boolean;
 };
 
 type UploadState = 'idle' | 'uploading' | 'error';
@@ -21,6 +24,9 @@ export function MediaField({
   hint,
   accept = 'image/*',
   maxSizeMb = 5,
+  boutiqueId,
+  context = 'settings',
+  disabled = false,
 }: MediaFieldProps) {
   const [mode, setMode] = useState<'url' | 'upload'>(value ? 'url' : 'url');
   const [uploadState, setUploadState] = useState<UploadState>('idle');
@@ -28,6 +34,11 @@ export function MediaField({
   const [urlInput, setUrlInput] = useState(value ?? '');
   const [preview, setPreview] = useState(value ?? '');
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setUrlInput(value ?? '');
+    setPreview(value ?? '');
+  }, [value]);
 
   const uploadFile = useCallback(async (file: File) => {
     if (file.size > maxSizeMb * 1024 * 1024) {
@@ -43,9 +54,10 @@ export function MediaField({
 
       const form = new FormData();
       form.append('file', file);
-      form.append('context', 'settings');
+       form.append('context', context);
 
-      const resp = await fetch('/api/media/upload', {
+      const query = boutiqueId ? `?boutiqueId=${encodeURIComponent(boutiqueId)}` : '';
+      const resp = await fetch(`/api/media/upload${query}`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
@@ -70,7 +82,7 @@ export function MediaField({
       setError(e instanceof Error ? e.message : 'Erreur upload');
       setUploadState('error');
     }
-  }, [maxSizeMb, onChange]);
+  }, [boutiqueId, context, maxSizeMb, onChange]);
 
   const handleUrlChange = useCallback((val: string) => {
     setUrlInput(val);
@@ -94,6 +106,7 @@ export function MediaField({
         <button
           type="button"
           className={`bo-btn bo-btn--sm ${mode === 'url' ? 'bo-btn--primary' : 'bo-btn--ghost'}`}
+          disabled={disabled}
           onClick={() => setMode('url')}
         >
           URL
@@ -101,12 +114,13 @@ export function MediaField({
         <button
           type="button"
           className={`bo-btn bo-btn--sm ${mode === 'upload' ? 'bo-btn--primary' : 'bo-btn--ghost'}`}
+          disabled={disabled}
           onClick={() => setMode('upload')}
         >
           Upload
         </button>
         {preview && (
-          <button type="button" className="bo-btn bo-btn--sm bo-btn--danger" onClick={handleClear}>
+          <button type="button" disabled={disabled} className="bo-btn bo-btn--sm bo-btn--danger" onClick={handleClear}>
             Effacer
           </button>
         )}
@@ -116,6 +130,7 @@ export function MediaField({
         <input
           className="bo-input"
           type="text"
+          disabled={disabled}
           value={urlInput}
           onChange={(e) => handleUrlChange(e.target.value)}
           placeholder="https://example.com/image.jpg"
@@ -135,7 +150,7 @@ export function MediaField({
           <button
             type="button"
             className="bo-btn"
-            disabled={uploadState === 'uploading'}
+            disabled={disabled || uploadState === 'uploading'}
             onClick={() => fileRef.current?.click()}
           >
             {uploadState === 'uploading' ? 'Upload en cours...' : 'Choisir un fichier'}

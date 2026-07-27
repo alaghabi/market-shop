@@ -29,6 +29,8 @@ class NotificationLog extends AbstractEntity
         private ?string $errorMessage = null,
         #[ORM\Column]
         private \DateTimeImmutable $createdAt = new \DateTimeImmutable(),
+        #[ORM\Column(length: 160, nullable: true, unique: true)]
+        private ?string $deduplicationKey = null,
     ) {
         parent::__construct();
     }
@@ -84,5 +86,10 @@ class NotificationLog extends AbstractEntity
     public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function getDeduplicationKey(): ?string
+    {
+        return $this->deduplicationKey;
     }
 }

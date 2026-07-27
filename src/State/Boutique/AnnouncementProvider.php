@@ -9,6 +9,8 @@ use ApiPlatform\State\ProviderInterface;
 use App\Dto\Boutique\AnnouncementOutput;
 use App\Entity\Announcement;
 use App\Repository\AnnouncementRepository;
+use App\Repository\BoutiqueRepository;
+use App\Security\BoutiqueContext;
 use App\Service\FrontOfficeCacheService;
 use App\State\Common\BoutiqueAwareProviderTrait;
 
@@ -20,6 +22,8 @@ final readonly class AnnouncementProvider implements ProviderInterface
     public function __construct(
         private AnnouncementRepository $announcements,
         private FrontOfficeCacheService $cache,
+        private BoutiqueRepository $boutiques,
+        private BoutiqueContext $context,
     ) {
     }
 
@@ -29,9 +33,11 @@ final readonly class AnnouncementProvider implements ProviderInterface
         $boutique = $this->resolveBoutiqueFromRequest($context);
 
         if ($operation instanceof GetCollection && '/admin/announcements' === $operation->getUriTemplate()) {
+            $criteria = $boutique ? ['boutique' => $boutique] : [];
+
             return array_map(
                 fn (Announcement $a) => $this->toOutput($a),
-                $this->announcements->findBy([], ['createdAt' => 'DESC']),
+                $this->announcements->findBy($criteria, ['createdAt' => 'DESC']),
             );
         }
 

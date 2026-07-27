@@ -8,8 +8,13 @@ use App\Repository\RefundRepository;
 use App\Repository\BoutiqueRepository;
 use App\Security\BoutiqueContext;
 use App\Entity\Boutique;
+use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 
 final class RefundProvider implements ProviderInterface
 {
@@ -17,11 +22,16 @@ final class RefundProvider implements ProviderInterface
         private RefundRepository $refunds,
         private BoutiqueRepository $boutiques,
         private BoutiqueContext $context,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): ?RefundOutput
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|RefundOutput|null
     {
+        if ($operation instanceof GetCollection) {
+            return $this->getCollection($operation, $uriVariables, $context);
+        }
+
         $refund = $this->refunds->find($uriVariables['id'] ?? null);
         if (!$refund instanceof Refund || !$this->canAccess($refund, $context)) {
             return null;
@@ -30,17 +40,28 @@ final class RefundProvider implements ProviderInterface
         return $this->toOutput($refund);
     }
 
-    /** @return list<RefundOutput> */
-    public function getCollection(Operation $operation, array $uriVariables = [], array $context = []): array
+    public function getCollection(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $boutique = $this->resolveBoutique($context, $uriVariables);
         if (!$boutique instanceof Boutique) {
-            return [];
+            return new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
         }
 
-        $refunds = $this->refunds->findByBoutique((string) $boutique->getId());
+        $result = $this->refunds->findForBackoffice(
+            (string) $boutique->getId(),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
 
-        return array_map($this->toOutput(...), $refunds);
+        return new BackofficePaginator(
+            array_map($this->toOutput(...), $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function canAccess(Refund $refund, array $context): bool
@@ -59,7 +80,7 @@ final class RefundProvider implements ProviderInterface
     private function resolveBoutique(array $context, array $uriVariables = []): ?Boutique
     {
         $request = $context['request'] ?? null;
-        $boutique = $request instanceof \Symfony\Component\HttpFoundation\Request
+        $boutique = $request instanceof Request
             ? $request->attributes->get('_boutique')
             : null;
         if ($boutique instanceof Boutique) {

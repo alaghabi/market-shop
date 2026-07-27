@@ -31,7 +31,7 @@ final class CreateSuperAdminCommand extends Command
             ->getRepository(User::class)
             ->findOneBy(['identifier' => self::EMAIL]);
 
-        $password = '123456';
+        $password = 'ahmed@1991';
 
         if ($user instanceof User && $user->isPasswordValid($password)) {
             $io->success(sprintf('Super-admin "%s" already exists with a valid password.', self::EMAIL));

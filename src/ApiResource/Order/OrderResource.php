@@ -17,11 +17,11 @@ use App\State\Order\OrderProvider;
 #[ApiResource(
     shortName: 'Order',
     operations: [
-        new GetCollection(uriTemplate: '/orders', security: "is_granted('ROLE_CAISSIER')", output: OrderOutput::class, provider: OrderProvider::class),
+        new GetCollection(uriTemplate: '/orders', security: "is_granted('ROLE_CAISSIER') or is_granted('ROLE_BOUTIQUE_ADMIN') or is_granted('ROLE_SUPER_ADMIN')", output: OrderOutput::class, provider: OrderProvider::class),
         new Post(uriTemplate: '/orders', security: "is_granted('ROLE_CUSTOMER')"),
         new Post(uriTemplate: '/pos/orders', security: "is_granted('ROLE_CAISSIER')"),
-        new Get(uriTemplate: '/orders/{id}', security: "is_granted('ROLE_CUSTOMER')"),
-        new Patch(uriTemplate: '/orders/{id}', security: "is_granted('ROLE_CAISSIER')", processor: OrderProcessor::class),
+        new Get(uriTemplate: '/orders/{id}', security: "is_granted('ROLE_CUSTOMER') or is_granted('ROLE_CAISSIER') or is_granted('ROLE_BOUTIQUE_ADMIN') or is_granted('ROLE_SUPER_ADMIN')", provider: OrderProvider::class, output: OrderOutput::class),
+        new Patch(uriTemplate: '/orders/{id}', security: "is_granted('ROLE_CAISSIER') or is_granted('ROLE_BOUTIQUE_ADMIN') or is_granted('ROLE_SUPER_ADMIN')", provider: OrderProvider::class, processor: OrderProcessor::class),
         new Delete(uriTemplate: '/orders/{id}', security: "is_granted('ROLE_BOUTIQUE_ADMIN')", read: false, processor: OrderProcessor::class),
     ],
     provider: EmptyProvider::class,

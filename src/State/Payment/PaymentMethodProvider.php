@@ -4,21 +4,28 @@ namespace App\State\Payment;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Payment\PaymentMethodOutput;
 use App\Entity\PaymentMethod;
 use App\Repository\PaymentMethodRepository;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 
 /** @implements ProviderInterface<PaymentMethodOutput> */
 final readonly class PaymentMethodProvider implements ProviderInterface
 {
-    public function __construct(private PaymentMethodRepository $methods)
-    {
+    public function __construct(
+        private PaymentMethodRepository $methods,
+        private BackofficeScopeResolver $scope,
+    ) {
     }
 
-    /** @return list<PaymentMethodOutput>|PaymentMethodOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|PaymentMethodOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|PaymentMethodOutput|null
     {
-        unset($operation, $context);
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
 
         if (isset($uriVariables['id'])) {
             $method = $this->methods->find((string) $uriVariables['id']);
@@ -26,7 +33,17 @@ final readonly class PaymentMethodProvider implements ProviderInterface
             return $method instanceof PaymentMethod ? $this->toOutput($method) : null;
         }
 
-        return array_map([$this, 'toOutput'], $this->methods->findBy([], ['name' => 'ASC']));
+        $result = $this->methods->findForBackoffice(
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
+
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function toOutput(PaymentMethod $method): PaymentMethodOutput

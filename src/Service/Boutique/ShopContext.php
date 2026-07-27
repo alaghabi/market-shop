@@ -8,7 +8,6 @@ use App\Repository\BoutiqueRepository;
 use App\Security\BoutiqueContext;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
-use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
 final readonly class ShopContext
 {
@@ -21,7 +20,6 @@ final readonly class ShopContext
         private SubdomainResolver $resolver,
         private RequestStack $requestStack,
         private BoutiqueContext $boutiqueContext,
-        private AuthorizationCheckerInterface $auth,
         private TokenStorageInterface $tokenStorage,
         private string $rootDomain,
         private int $cacheTtl = self::DEFAULT_TTL,
@@ -43,7 +41,7 @@ final readonly class ShopContext
         $slug = $this->resolveSlugFromRequest($request);
 
         if (null === $slug) {
-            if ($this->isAuthenticatedAdmin()) {
+            if ($this->isAuthenticatedStaff()) {
                 return $this->resolveFromQueryOrPath($request);
             }
 
@@ -56,7 +54,11 @@ final readonly class ShopContext
             return null;
         }
 
-        if (!$boutique->isVisiblePublicly() && !$this->isAuthenticatedAdmin()) {
+        if ($this->isAuthenticatedStaff() && !$this->boutiqueContext->canAccessBoutique($boutique)) {
+            return null;
+        }
+
+        if (!$boutique->isVisiblePublicly() && !$this->isAuthenticatedStaff()) {
             return null;
         }
 
@@ -83,7 +85,7 @@ final readonly class ShopContext
 
         $slug = $this->resolveSlugFromRequest($request);
 
-        if (null === $slug && $this->isAuthenticatedAdmin()) {
+        if (null === $slug && $this->isAuthenticatedStaff()) {
             return $request->query->get('slug');
         }
 
@@ -154,13 +156,13 @@ final readonly class ShopContext
         return $boutique;
     }
 
-    private function isAuthenticatedAdmin(): bool
+    private function isAuthenticatedStaff(): bool
     {
         if (null === $this->tokenStorage->getToken()) {
             return false;
         }
 
-        return $this->auth->isGranted('ROLE_BOUTIQUE_ADMIN');
+        return $this->boutiqueContext->isStaff();
     }
 
     private function resolveFromQueryOrPath($request): ?Boutique

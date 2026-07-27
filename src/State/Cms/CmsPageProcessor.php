@@ -47,6 +47,10 @@ final readonly class CmsPageProcessor implements ProcessorInterface
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): CmsPageOutput|CmsBlockOutput|null
     {
+        if ('publish_cms_page' === $operation->getName() || 'unpublish_cms_page' === $operation->getName()) {
+            return $this->handlePublication($uriVariables, 'publish_cms_page' === $operation->getName());
+        }
+
         $boutique = $this->resolveBoutiqueForWrite($data, $uriVariables, $context);
 
         if ($operation instanceof Delete) {
@@ -77,6 +81,31 @@ final readonly class CmsPageProcessor implements ProcessorInterface
         }
 
         return null;
+    }
+
+    private function handlePublication(array $uriVariables, bool $publish): CmsPageOutput
+    {
+        $page = $this->pages->find((string) ($uriVariables['id'] ?? ''));
+        if (!$page instanceof CmsPage) {
+            throw new NotFoundHttpException('Page not found');
+        }
+        if (!$this->context->canAccessBoutique($page->getBoutique())) {
+            throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException('Access denied');
+        }
+
+        if ($publish) {
+            $page->publish();
+        } else {
+            $page->setStatus(CmsPageStatus::Draft);
+        }
+
+        $this->em->flush();
+        $boutiqueId = (string) $page->getBoutique()->getId();
+        $this->cache->invalidate($boutiqueId);
+        $this->cache->invalidatePage($boutiqueId, (string) $page->getId());
+        $this->frontOfficeCache->invalidateSeo($boutiqueId);
+
+        return $this->toPageOutput($page);
     }
 
     private function handlePageCreate(mixed $data, \App\Entity\Boutique $boutique): CmsPageOutput

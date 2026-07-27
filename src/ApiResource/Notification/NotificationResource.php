@@ -30,6 +30,7 @@ use App\State\Notification\NotificationProvider;
         ),
     ],
     provider: NotificationProvider::class,
+    paginationItemsPerPage: 20,
 )]
 final class NotificationResource
 {

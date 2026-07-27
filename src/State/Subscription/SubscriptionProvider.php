@@ -2,15 +2,20 @@
 
 namespace App\State\Subscription;
 
+use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Subscription\SubscriptionOutput;
 use App\Entity\Boutique;
 use App\Entity\Subscription;
 use App\Repository\BoutiqueRepository;
 use App\Repository\SubscriptionRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Backoffice\BackofficeScopeResolver;
 use App\State\Common\BoutiqueAwareProviderTrait;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /** @implements ProviderInterface<SubscriptionOutput> */
@@ -22,19 +27,28 @@ final class SubscriptionProvider implements ProviderInterface
         private readonly SubscriptionRepository $repository,
         private readonly BoutiqueRepository $boutiques,
         private readonly BoutiqueContext $context,
+        private readonly BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return array<SubscriptionOutput>|SubscriptionOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|SubscriptionOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|SubscriptionOutput|null
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $boutique = $this->resolveBoutiqueFromRequest($context);
         if (!$boutique instanceof Boutique) {
-            throw new NotFoundHttpException('Boutique not found');
+            if ($operation instanceof Get) {
+                throw new NotFoundHttpException('Boutique not found');
+            }
+
+            return new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
         }
 
         if (!$this->context->canAccessBoutique($boutique)) {
-            return null;
+            return $operation instanceof Get
+                ? null
+                : new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
         }
 
         if (isset($uriVariables['id'])) {
@@ -46,9 +60,18 @@ final class SubscriptionProvider implements ProviderInterface
             return $this->toOutput($entity);
         }
 
-        $entities = $this->repository->findBy(['boutique' => $boutique], ['createdAt' => 'DESC']);
+        $result = $this->repository->findByBoutiquePaginated(
+            $boutique,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
 
-        return array_map([$this, 'toOutput'], $entities);
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
+        );
     }
 
     private function toOutput(Subscription $entity): SubscriptionOutput

@@ -12,6 +12,8 @@ services:
             string $appSecret: '%kernel.secret%'
             bool $kernelDebug: '%kernel.debug%'
             string $ollamaBaseUrl: '%env(OLLAMA_BASE_URL)%'
+            string $mailerFrom: '%env(MAILER_FROM)%'
+            string $publicBaseUrl: '%env(APP_PUBLIC_URL)%'
             'bool $globalEnabled': '%chatbot.global_enabled%'
             'array $modules': '%modules%'
 
@@ -74,5 +76,3 @@ services:
     App\Config\CacheConfig:
         arguments:
             $cacheTtl: '%cache_ttl%'
-
-

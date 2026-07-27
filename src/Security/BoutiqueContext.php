@@ -3,6 +3,7 @@
 namespace App\Security;
 
 use App\Entity\Boutique;
+use App\Enum\UserStatus;
 use App\Repository\BoutiqueRepository;
 use App\Repository\UserRepository;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -22,6 +23,14 @@ final readonly class BoutiqueContext
         return $this->security->isGranted('ROLE_SUPER_ADMIN');
     }
 
+    public function isStaff(): bool
+    {
+        return $this->isSuperAdmin()
+            || $this->security->isGranted('ROLE_BOUTIQUE_ADMIN')
+            || $this->security->isGranted('ROLE_CAISSIER')
+            || $this->security->isGranted('ROLE_EMPLOYEE');
+    }
+
     public function getBoutiqueId(): ?Uuid
     {
         $boutiqueIds = $this->getBoutiqueIds();
@@ -32,6 +41,13 @@ final readonly class BoutiqueContext
     /** @return list<Uuid> */
     public function getBoutiqueIds(): array
     {
+        if ($this->isSuperAdmin()) {
+            return array_values(array_map(
+                static fn (Boutique $boutique): Uuid => $boutique->getId(),
+                $this->boutiques->findAll(),
+            ));
+        }
+
         $user = $this->security->getUser();
         if (null === $user) {
             return [];
@@ -43,20 +59,19 @@ final readonly class BoutiqueContext
             return [];
         }
 
-        $ids = $appUser->getAdministeredBoutiques()->toArray();
-
-        // Super admins can access all boutiques
-        if ([] === $ids && $this->isSuperAdmin()) {
-            return array_values(array_map(
-                static fn (Boutique $b): Uuid => $b->getId(),
-                $this->boutiques->findAll(),
-            ));
+        $boutiques = $appUser->getAdministeredBoutiques()->toArray();
+        foreach ($appUser->getUserShops() as $userShop) {
+            if (UserStatus::Active === $userShop->getStatus()) {
+                $boutiques[] = $userShop->getBoutique();
+            }
         }
 
-        return array_values(array_map(
-            static fn (Boutique $boutique): Uuid => $boutique->getId(),
-            $ids,
-        ));
+        $ids = [];
+        foreach ($boutiques as $boutique) {
+            $ids[(string) $boutique->getId()] = $boutique->getId();
+        }
+
+        return array_values($ids);
     }
 
     public function getUserIdentifier(): ?string

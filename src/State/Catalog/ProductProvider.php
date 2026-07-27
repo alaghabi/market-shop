@@ -5,6 +5,7 @@ namespace App\State\Catalog;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\Catalog\ProductOutput;
 use App\Entity\Product;
 use App\Entity\ProductImage;
@@ -14,7 +15,10 @@ use App\Repository\ProductRepository;
 use App\Repository\ProductFavoriteRepository;
 use App\Repository\ReviewRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Backoffice\BackofficeScopeResolver;
 use App\State\Common\BoutiqueAwareProviderTrait;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 
 /** @implements ProviderInterface<ProductOutput> */
 final readonly class ProductProvider implements ProviderInterface
@@ -27,16 +31,21 @@ final readonly class ProductProvider implements ProviderInterface
         private ReviewRepository $reviews,
         private ProductFavoriteRepository $favorites,
         private BoutiqueContext $context,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return list<ProductOutput>|ProductOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|ProductOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|ProductOutput|null
     {
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $boutique = $this->resolveBoutiqueFromRequest($context, $uriVariables);
         if (!$boutique) {
             if (!$this->context->isSuperAdmin()) {
-                return $operation instanceof Get ? null : [];
+                return $operation instanceof Get
+                    ? null
+                    : new BackofficePaginator([], $pagination['page'], $pagination['itemsPerPage'], 0);
             }
 
             if ($operation instanceof Get) {
@@ -45,9 +54,20 @@ final readonly class ProductProvider implements ProviderInterface
                 return $product instanceof Product ? $this->toOutput($product) : null;
             }
 
-            return array_map(
-                [$this, 'toOutput'],
-                $this->products->findBy(['deletedAt' => null], ['name' => 'ASC']),
+            $result = $this->products->findForBackoffice(
+                null,
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
+
+            return new BackofficePaginator(
+                array_map(
+                    [$this, 'toOutput'],
+                    $result['items'],
+                ),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+                $result['total'],
             );
         }
 
@@ -59,9 +79,17 @@ final readonly class ProductProvider implements ProviderInterface
                 : null;
         }
 
-        return array_map(
-            [$this, 'toOutput'],
-            $this->products->findBy(['boutique' => $boutique, 'deletedAt' => null], ['name' => 'ASC']),
+        $result = $this->products->findForBackoffice(
+            $boutique,
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
+
+        return new BackofficePaginator(
+            array_map([$this, 'toOutput'], $result['items']),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
         );
     }
 
@@ -115,6 +143,7 @@ final readonly class ProductProvider implements ProviderInterface
             'smallUrl' => $image->getSmallUrl(),
             'largeUrl' => $image->getLargeUrl(),
             'alt' => $image->getAlt(),
+            'isDefault' => 0 === $image->getPosition(),
         ], $product->getImages()->toArray());
         $output->media = array_map(fn ($medium) => [
             'type' => $medium->getType(),

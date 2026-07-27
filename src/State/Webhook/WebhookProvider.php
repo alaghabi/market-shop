@@ -7,30 +7,41 @@ use App\Entity\Webhook;
 use App\Repository\WebhookRepository;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 
 final class WebhookProvider implements ProviderInterface
 {
     public function __construct(
         private WebhookRepository $webhooks,
+        private BackofficeScopeResolver $scope,
     ) {
     }
 
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): ?WebhookOutput
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|WebhookOutput|null
     {
+        if (!isset($uriVariables['id'])) {
+            $request = $context['request'] ?? null;
+            $request = $request instanceof Request ? $request : null;
+            $pagination = $this->scope->pagination($request);
+            $result = $this->webhooks->findForBackoffice($pagination['page'], $pagination['itemsPerPage']);
+
+            return new BackofficePaginator(
+                array_map($this->toOutput(...), $result['items']),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+                $result['total'],
+            );
+        }
+
         $webhook = $this->webhooks->find($uriVariables['id'] ?? null);
         if (!$webhook instanceof Webhook) {
             return null;
         }
 
         return $this->toOutput($webhook);
-    }
-
-    /** @return list<WebhookOutput> */
-    public function getCollection(Operation $operation, array $uriVariables = [], array $context = []): array
-    {
-        $webhooks = $this->webhooks->findAllAdmin();
-
-        return array_map($this->toOutput(...), $webhooks);
     }
 
     private function toOutput(Webhook $webhook): WebhookOutput

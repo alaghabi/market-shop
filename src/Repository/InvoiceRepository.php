@@ -23,6 +23,35 @@ final class InvoiceRepository extends ServiceEntityRepository
         return $this->findBy(['boutique' => $boutique], ['createdAt' => 'DESC']);
     }
 
+    /** @return array{items: list<Invoice>, total: int} */
+    public function findForBackoffice(?Boutique $boutique, int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('invoice');
+
+        if ($boutique instanceof Boutique) {
+            $query->andWhere('invoice.boutique = :boutique')
+                ->setParameter('boutique', $boutique);
+        }
+
+        $countQuery = clone $query;
+        $total = (int) $countQuery
+            ->resetDQLPart('select')
+            ->resetDQLPart('orderBy')
+            ->select('COUNT(invoice.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $items = $query
+            ->orderBy('invoice.createdAt', 'DESC')
+            ->addOrderBy('invoice.id', 'DESC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)
+            ->setMaxResults($itemsPerPage)
+            ->getQuery()
+            ->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
     public function findOneByOrder(Order $order): ?Invoice
     {
         return $this->findOneBy(['order' => $order]);

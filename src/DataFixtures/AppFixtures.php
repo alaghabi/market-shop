@@ -344,7 +344,7 @@ final class AppFixtures extends Fixture
             $this->faker->phoneNumber(),
             $this->faker->streetAddress(),
             ['facebook' => $this->faker->url(), 'instagram' => $this->faker->url()],
-             'hanooti-marketplace',
+            'hanooti-marketplace',
         );
         $settings->setSlogan($this->faker->catchPhrase());
         $settings->setDescription($this->faker->paragraph());

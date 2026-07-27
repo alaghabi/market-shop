@@ -4,10 +4,14 @@ namespace App\State\PlatformModule;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\PlatformModule\PlatformModuleOutput;
 use App\Entity\PlatformModule;
 use App\Repository\PlatformModuleRepository;
 use App\Repository\SubscriptionPlanModuleRepository;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /** @implements ProviderInterface<PlatformModuleOutput> */
@@ -16,11 +20,11 @@ final class PlatformModuleProvider implements ProviderInterface
     public function __construct(
         private readonly PlatformModuleRepository $repository,
         private readonly SubscriptionPlanModuleRepository $modules,
+        private readonly BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return array<PlatformModuleOutput>|PlatformModuleOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|PlatformModuleOutput|null
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|PlatformModuleOutput|null
     {
         if (isset($uriVariables['id'])) {
             $entity = $this->repository->find($uriVariables['id']);
@@ -31,27 +35,40 @@ final class PlatformModuleProvider implements ProviderInterface
             return $this->toOutput($entity);
         }
 
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
         $platformModules = [];
         foreach ($this->repository->findAll() as $entity) {
             $platformModules[$entity->getModule()->getCode()] = $entity;
         }
 
-        return array_map(
-            function ($module) use ($platformModules): PlatformModuleOutput {
-                $entity = $platformModules[$module->getCode()] ?? null;
-                if ($entity instanceof PlatformModule) {
-                    return $this->toOutput($entity);
-                }
+        $result = $this->modules->findForBackoffice(
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+        );
 
-                $output = new PlatformModuleOutput();
-                $output->moduleId = (string) $module->getId();
-                $output->moduleCode = $module->getCode();
-                $output->moduleName = $module->getName();
-                $output->isEnabled = true;
+        return new BackofficePaginator(
+            array_map(
+                function ($module) use ($platformModules): PlatformModuleOutput {
+                    $entity = $platformModules[$module->getCode()] ?? null;
+                    if ($entity instanceof PlatformModule) {
+                        return $this->toOutput($entity);
+                    }
 
-                return $output;
-            },
-            $this->modules->findBy([], ['category' => 'ASC', 'name' => 'ASC']),
+                    $output = new PlatformModuleOutput();
+                    $output->moduleId = (string) $module->getId();
+                    $output->moduleCode = $module->getCode();
+                    $output->moduleName = $module->getName();
+                    $output->isEnabled = true;
+
+                    return $output;
+                },
+                $result['items'],
+            ),
+            $pagination['page'],
+            $pagination['itemsPerPage'],
+            $result['total'],
         );
     }
 

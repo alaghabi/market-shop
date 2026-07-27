@@ -4,10 +4,14 @@ namespace App\State\SubscriptionModule;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use ApiPlatform\State\Pagination\PaginatorInterface;
 use App\Dto\SubscriptionModule\SubscriptionModuleOutput;
 use App\Entity\SubscriptionModule;
 use App\Repository\SubscriptionModuleRepository;
 use App\Repository\SubscriptionPlanRepository;
+use App\Service\Backoffice\BackofficeScopeResolver;
+use App\State\Common\BackofficePaginator;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /** @implements ProviderInterface<SubscriptionModuleOutput> */
@@ -16,11 +20,12 @@ final class SubscriptionModuleProvider implements ProviderInterface
     public function __construct(
         private readonly SubscriptionModuleRepository $repository,
         private readonly SubscriptionPlanRepository $plans,
+        private readonly BackofficeScopeResolver $scope,
     ) {
     }
 
-    /** @return array<SubscriptionModuleOutput>|SubscriptionModuleOutput|null */
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): array|SubscriptionModuleOutput|null
+    /** @return PaginatorInterface<SubscriptionModuleOutput>|SubscriptionModuleOutput|null */
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): PaginatorInterface|SubscriptionModuleOutput|null
     {
         if (isset($uriVariables['id'])) {
             $entity = $this->repository->find($uriVariables['id']);
@@ -37,12 +42,31 @@ final class SubscriptionModuleProvider implements ProviderInterface
                 throw new NotFoundHttpException('Plan not found');
             }
 
-            $entities = $this->repository->findByPlan($plan);
+            $request = $context['request'] ?? null;
+            $request = $request instanceof Request ? $request : null;
+            $pagination = $this->scope->pagination($request);
+            $result = $this->repository->findForBackoffice(
+                $plan,
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+            );
 
-            return array_map([$this, 'toOutput'], $entities);
+            return new BackofficePaginator(
+                array_map([$this, 'toOutput'], $result['items']),
+                $pagination['page'],
+                $pagination['itemsPerPage'],
+                $result['total'],
+            );
         }
 
-        return [];
+        $request = $context['request'] ?? null;
+        $request = $request instanceof Request ? $request : null;
+        $pagination = $this->scope->pagination($request);
+
+        /** @var list<SubscriptionModuleOutput> $items */
+        $items = [];
+
+        return new BackofficePaginator($items, $pagination['page'], $pagination['itemsPerPage'], 0);
     }
 
     public function toOutput(SubscriptionModule $entity): SubscriptionModuleOutput

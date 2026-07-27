@@ -44,4 +44,18 @@ final class WebhookRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /** @return array{items: list<Webhook>, total: int} */
+    public function findForBackoffice(int $page, int $itemsPerPage): array
+    {
+        $query = $this->createQueryBuilder('webhook');
+        $countQuery = clone $query;
+        $total = (int) $countQuery->resetDQLPart('select')->resetDQLPart('orderBy')
+            ->select('COUNT(webhook.id)')->getQuery()->getSingleScalarResult();
+        $items = $query->orderBy('webhook.createdAt', 'DESC')->addOrderBy('webhook.id', 'DESC')
+            ->setFirstResult(($page - 1) * $itemsPerPage)->setMaxResults($itemsPerPage)
+            ->getQuery()->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
 }

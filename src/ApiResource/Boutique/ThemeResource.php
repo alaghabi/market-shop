@@ -36,6 +36,7 @@ use App\State\Boutique\ThemeProcessor;
             uriTemplate: '/admin/themes/{id}',
             security: "is_granted('ROLE_SUPER_ADMIN')",
             input: \App\Dto\Boutique\ThemeInput::class,
+            provider: ThemeProvider::class,
             processor: ThemeProcessor::class,
         ),
         new Delete(

@@ -34,7 +34,7 @@ export type StorefrontContent = {
   headerConfig?: Record<string, boolean>;
   footerConfig?: Record<string, string | boolean>;
   navigationItems?: StorefrontNavigationItem[];
-  frontOfficePages?: Array<{ slug?: string; label?: string; enabled?: boolean; position?: number }>;
+  frontOfficePages?: Array<{ slug?: string; label?: string; enabled?: boolean; position?: number; source?: string }>;
   featuredCategories?: Array<{ categoryId?: string; label?: string; position?: number }>;
   homepageSections?: StorefrontSection[];
   banners?: StorefrontBanner[];
@@ -70,7 +70,19 @@ export function resolveStorefrontNavigation(content: StorefrontContent, reviewsE
       };
     });
 
-  return configured.length > 0 ? configured : defaultNavigation(reviewsEnabled);
+  const baseNavigation = configured.length > 0 ? configured : defaultNavigation(reviewsEnabled);
+  const cmsPages = (content.frontOfficePages ?? [])
+    .filter((page) => page.source === 'cms' && page.enabled !== false && page.slug && page.label)
+    .sort((left, right) => (left.position ?? 0) - (right.position ?? 0))
+    .map((page) => ({ label: page.label as string, href: boutiqueLink(`/pages/${page.slug}`) }));
+
+  const seen = new Set<string>();
+
+  return [...baseNavigation, ...cmsPages].filter((item) => {
+    if (seen.has(item.href)) return false;
+    seen.add(item.href);
+    return true;
+  });
 }
 
 export function resolveStorefrontHero(content: StorefrontContent, boutiqueName: string): { title: string; subtitle: string; banner?: StorefrontBanner } {
