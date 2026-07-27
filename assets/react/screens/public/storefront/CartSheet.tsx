@@ -140,7 +140,7 @@ export function CartSheet({
                           <button type="button" onClick={() => onRemove(cartItemKey(i))} className="sf-neutral-action cursor-pointer rounded-full px-3 py-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Retirer</button>
                     </div>
                   </div>
-                   <div className="text-sm font-bold text-[color:var(--sf-text,var(--ds-on-surface))]">{(i.qty * i.product.priceCents / 100).toFixed(0)} {i.product.currency}</div>
+                   <div className="text-sm font-bold text-[color:var(--sf-text,var(--ds-on-surface))]">{(i.qty * i.product.priceCents / 100).toFixed(2)} {i.product.currency}</div>
                 </motion.div>
               ))}
               </AnimatePresence>

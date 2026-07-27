@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { boutiqueQuery } from '../screens/public/boutiqueRouting';
 import { Badge, Button, Card, Textarea } from './ui';
 
 type ReviewOutput = {
@@ -16,7 +17,7 @@ type ReviewSectionProps = {
   scope?: 'boutique' | 'platform';
 };
 
-export function ReviewSection({ boutiqueSlug: _boutiqueSlug, productId, scope = 'boutique', onSubmitted }: ReviewSectionProps & { onSubmitted?: () => void }) {
+export function ReviewSection({ boutiqueSlug, productId, scope = 'boutique', onSubmitted }: ReviewSectionProps & { onSubmitted?: () => void }) {
   const [reviews, setReviews] = useState<ReviewOutput[]>([]);
   const [authorName, setAuthorName] = useState('');
   const [rating, setRating] = useState(0);
@@ -24,8 +25,11 @@ export function ReviewSection({ boutiqueSlug: _boutiqueSlug, productId, scope = 
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
-  const endpoint = scope === 'platform' ? '/api/platform/reviews' : '/api/reviews';
-  const productEndpoint = productId ? `/api/products/${encodeURIComponent(productId)}/reviews` : endpoint;
+  const query = scope === 'platform' ? '' : boutiqueQuery(boutiqueSlug);
+  const endpoint = scope === 'platform' ? '/api/platform/reviews' : `/api/reviews${query}`;
+  const productEndpoint = productId
+    ? `/api/products/${encodeURIComponent(productId)}/reviews${query}`
+    : endpoint;
   const listEndpoint = productEndpoint;
 
   useEffect(() => {

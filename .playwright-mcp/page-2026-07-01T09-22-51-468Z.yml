@@ -1,7 +1,0 @@
-- complementary "Edit with Lovable" [ref=f16e1]:
-  - link "Edit with Lovable" [ref=f16e2] [cursor=pointer]:
-    - /url: https://lovable.dev/projects/4ec1b0ef-c439-4627-8074-8095e244b15c?utm_source=lovable-badge
-    - generic [ref=f16e3]: Edit with
-    - img [ref=f16e4]
-  - button "Dismiss" [ref=f16e9] [cursor=pointer]:
-    - img [ref=f16e10]

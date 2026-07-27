@@ -1,5 +1,5 @@
 import { Heart, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { authHeaders, boutiqueLink, boutiqueQuery } from '../boutiqueRouting';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
@@ -22,13 +22,25 @@ export function FavoritesPopover({ boutiqueSlug, favoriteCount: badgeCount = 0, 
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<FavoriteItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   async function refresh(): Promise<void> {
-    const response = await fetch(`/api/favorites/products${boutiqueQuery(boutiqueSlug)}`, { credentials: 'same-origin', headers: authHeaders() });
-    if (response.ok) {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/favorites/products${boutiqueQuery(boutiqueSlug)}`, { credentials: 'same-origin', headers: authHeaders() });
+      if (!response.ok) {
+        setError('Impossible de charger les favoris.');
+        return;
+      }
       const payload = await response.json() as FavoritePayload;
       setItems(unpack(payload));
       onRefresh?.();
+    } catch {
+      setError('Impossible de charger les favoris.');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -37,17 +49,29 @@ export function FavoritesPopover({ boutiqueSlug, favoriteCount: badgeCount = 0, 
     void refresh();
   }, [boutiqueSlug, open]);
 
+  useEffect(() => {
+    if (!open) return;
+    closeButtonRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ('Escape' === event.key) setOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
   async function removeFavorite(productId: string): Promise<void> {
     const response = await fetch(`/api/favorites/products/${productId}${boutiqueQuery(boutiqueSlug)}`, {
       method: 'DELETE',
       credentials: 'same-origin',
       headers: authHeaders(),
     });
-    if (response.ok) setItems((current) => current.filter((item) => item.productId !== productId));
+    if (response.ok) {
+      setItems((current) => current.filter((item) => item.productId !== productId));
+      onRefresh?.();
+    }
   }
 
-  // Use actual items count for badge to stay in sync
-  const displayCount = badgeCount > 0 ? badgeCount : items.length;
+  const displayCount = open || items.length > 0 ? items.length : badgeCount;
 
   return (
     <>
@@ -83,14 +107,18 @@ export function FavoritesPopover({ boutiqueSlug, favoriteCount: badgeCount = 0, 
                   <p className="sf-favorites-dialog__subtitle">Votre sélection personnelle</p>
                 </div>
               </div>
-              <button type="button" onClick={() => setOpen(false)} className="sf-favorites-dialog__close" aria-label="Fermer les favoris">
+              <button type="button" ref={closeButtonRef} onClick={() => setOpen(false)} className="sf-favorites-dialog__close" aria-label="Fermer les favoris">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="sf-favorites-dialog__count">{items.length} produit{items.length === 1 ? '' : 's'} sauvegardé{items.length === 1 ? '' : 's'}</div>
 
-            {loading ? <p className="sf-favorites-dialog__empty">Chargement...</p> : items.length === 0 ? (
+            {loading ? <p className="sf-favorites-dialog__empty">Chargement...</p> : error ? (
+              <div className="sf-favorites-dialog__empty">
+                <strong>{error}</strong>
+              </div>
+            ) : items.length === 0 ? (
               <div className="sf-favorites-dialog__empty">
                 <div className="sf-favorites-dialog__empty-icon"><Heart className="h-7 w-7" aria-hidden="true" /></div>
                 <strong>Votre liste est vide</strong>

@@ -121,6 +121,7 @@ export function StorefrontTheme({
   reviewsEnabled = false,
   favoriteProductIds,
   onToggleFavorite,
+  onFavoritesRefresh,
 }: {
   boutique: StoreBoutique;
   products: StoreProduct[];
@@ -129,6 +130,7 @@ export function StorefrontTheme({
   reviewsEnabled?: boolean;
   favoriteProductIds: string[];
   onToggleFavorite: (productId: string) => void;
+  onFavoritesRefresh?: () => void;
 }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -211,22 +213,24 @@ export function StorefrontTheme({
 
   async function handleSetQty(id: string, qty: number): Promise<void> {
     const item = cart.find((current) => cartItemKey(current) === id);
-    if (!item) return;
+    if (!item?.itemId) return;
     if (qty <= 0) {
       await handleRemove(id);
       return;
     }
-    await fetch(`/api/cart/items/${id}${boutiqueQuery(boutique.slug)}`, {
+    const response = await fetch(`/api/cart/items/${item.itemId}${boutiqueQuery(boutique.slug)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/merge-patch+json', ...(authHeaders() ?? {}) },
       body: JSON.stringify({ quantity: qty, variantId: item.product.variantId ?? null }),
     });
-    await refreshCart();
+    if (response.ok) await refreshCart();
   }
 
   async function handleRemove(id: string): Promise<void> {
-    await fetch(`/api/cart/items/${id}${boutiqueQuery(boutique.slug)}`, { method: 'DELETE', headers: authHeaders() });
-    await refreshCart();
+    const item = cart.find((current) => cartItemKey(current) === id);
+    if (!item?.itemId) return;
+    const response = await fetch(`/api/cart/items/${item.itemId}${boutiqueQuery(boutique.slug)}`, { method: 'DELETE', headers: authHeaders() });
+    if (response.ok) await refreshCart();
   }
 
   const { reviews, isLoading: reviewsLoading } = useStorefrontReviews(reviewsEnabled);
@@ -287,7 +291,7 @@ export function StorefrontTheme({
             >
               <Search className="h-4 w-4" />
              </button>}
-             {boutique.wishlistEnabled === true && <FavoritesPopover boutiqueSlug={boutique.slug} favoriteCount={favoriteProductIds.length} />}
+             {boutique.wishlistEnabled === true && <FavoritesPopover boutiqueSlug={boutique.slug} favoriteCount={favoriteProductIds.length} onRefresh={onFavoritesRefresh} />}
              {headerConfig.show_account !== false && boutique.customerAccountsEnabled !== false && <BoutiqueAccountLink boutiqueSlug={boutique.slug} />}
              {headerConfig.show_cart !== false && <CartSheet items={cart} onSetQty={handleSetQty} onRemove={handleRemove} />}
           </div>

@@ -329,7 +329,7 @@ export function ReviewsPage({ products, reviewsEnabled, boutique }: { products: 
           </>
         )}
 
-        {reviewsEnabled && <div className="mt-16"><ReviewSection boutiqueSlug="" onSubmitted={() => { const el = document.getElementById('avis-boutique'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} /></div>}
+        {reviewsEnabled && <div className="mt-16"><ReviewSection boutiqueSlug={boutique?.slug ?? ''} onSubmitted={() => { const el = document.getElementById('avis-boutique'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} /></div>}
       </div>
 
       {selectedReview && (

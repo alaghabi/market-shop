@@ -57,9 +57,9 @@ export function resetStorefrontTheme(): void {
   [
     '--ds-primary', '--ds-primary-container', '--ds-secondary', '--ds-surface', '--ds-surface-container-lowest',
     '--ds-surface-container', '--ds-surface-container-high', '--ds-on-surface', '--ds-on-surface-variant',
-    '--ds-outline-variant', '--primary', '--primary-container', '--secondary', '--surface',
+    '--ds-on-primary', '--ds-outline-variant', '--primary', '--primary-container', '--secondary', '--surface',
     '--surface-container-lowest', '--surface-container', '--surface-container-high', '--on-surface',
-    '--on-surface-variant', '--outline-variant', '--sf-bg', '--sf-surface', '--sf-surface-muted',
+    '--on-surface-variant', '--on-primary', '--outline-variant', '--sf-bg', '--sf-surface', '--sf-surface-muted',
     '--sf-surface-accent', '--sf-text', '--sf-text-muted', '--sf-accent', '--sf-accent-alt', '--sf-outline',
     '--ds-font-family', '--ds-font-size', '--ds-radius', '--ds-radius-sm', '--ds-radius-lg', '--sf-layout', '--sf-radius-card', '--sf-radius-lg',
   ].forEach((property) => root.style.removeProperty(property));

@@ -1,6 +1,0 @@
-[     860ms] TypeError: Cannot read properties of null (reading 'member')
-    at http://localhost:8082/build/app.5a1732e9.js:2:241814
-    at Generator.<anonymous> (http://localhost:8082/build/app.5a1732e9.js:2:236864)
-    at Generator.next (http://localhost:8082/build/app.5a1732e9.js:2:237707)
-    at xl (http://localhost:8082/build/app.5a1732e9.js:2:238900)
-    at o (http://localhost:8082/build/app.5a1732e9.js:2:239103)

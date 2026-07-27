@@ -11,10 +11,10 @@ const navigation = [
   { label: 'Accueil', path: '/' },
   { label: 'Catalogue', path: '/catalogue' },
   { label: 'Promotions', path: '/promotions' },
-  { label: 'Avis', path: '/avis' },
+  { label: 'Avis', path: '/avis', requiresReviews: true },
   { label: 'A propos', path: '/a-propos' },
   { label: 'Contact', path: '/contact' },
-];
+] as const;
 
 type StorefrontHeaderProps = {
   boutique: StoreBoutique;
@@ -30,6 +30,7 @@ type StorefrontHeaderProps = {
 
 export function StorefrontHeader({ boutique, showCart = true, cartItems, onSetCartQty, onRemoveCartItem, favoriteCount = 0, onFavoritesRefresh, cartOpen, onCartOpenChange }: StorefrontHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const navItems = navigation.filter((item) => !('requiresReviews' in item && item.requiresReviews) || boutique.reviewsEnabled === true);
 
   return (
     <>
@@ -56,7 +57,7 @@ export function StorefrontHeader({ boutique, showCart = true, cartItems, onSetCa
           </a>
 
           <nav className="sf-desktop-nav hidden items-center gap-8 lg:flex" aria-label="Navigation boutique">
-            {navigation.map((item) => <a key={item.path} href={boutiqueLink(item.path)} className="text-sm font-medium text-black/70 transition hover:text-black">{item.label}</a>)}
+            {navItems.map((item) => <a key={item.path} href={boutiqueLink(item.path)} className="text-sm font-medium text-black/70 transition hover:text-black">{item.label}</a>)}
           </nav>
 
           <div className="flex items-center gap-2">
@@ -85,7 +86,7 @@ export function StorefrontHeader({ boutique, showCart = true, cartItems, onSetCa
               </button>
             </div>
             <nav className="space-y-4" aria-label="Navigation mobile">
-              {navigation.map((item) => <a key={item.path} href={boutiqueLink(item.path)} className="block text-lg font-medium text-black/80">{item.label}</a>)}
+              {navItems.map((item) => <a key={item.path} href={boutiqueLink(item.path)} className="block text-lg font-medium text-black/80">{item.label}</a>)}
             </nav>
           </div>
         </div>

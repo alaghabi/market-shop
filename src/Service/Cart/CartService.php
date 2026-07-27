@@ -102,6 +102,10 @@ final readonly class CartService
         }
 
         $variant = $this->findVariant($product, $variantId);
+        // Quantity-only patches often omit variantId; do not clear an existing selection.
+        if (null === $variant && null !== $item->getVariant() && (null === $variantId || '' === trim($variantId))) {
+            $variant = $item->getVariant();
+        }
         $currentVariantId = (string) $item->getVariant()?->getId();
         $nextVariantId = (string) $variant?->getId();
         if ($currentVariantId !== $nextVariantId) {
