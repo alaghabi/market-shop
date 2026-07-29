@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Post;
 use App\Dto\UserShop\UserShopOutput;
 use App\State\User\UserShopProvider;
 use App\State\User\UserShopProcessor;
+use Symfony\Component\Validator\Constraints as Assert;
 
 #[ApiResource(
     shortName: 'UserShop',
@@ -60,4 +61,7 @@ final class UserShopResource
     public ?string $boutiqueId = null;
     public ?string $role = null;
     public ?string $status = null;
+
+    #[Assert\Length(max: 2000)]
+    public ?string $reason = null;
 }

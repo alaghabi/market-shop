@@ -15,10 +15,12 @@ use App\Repository\BoutiqueRepository;
 use App\Repository\UserRepository;
 use App\Repository\UserShopRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Auth\EmailVerificationService;
+use App\Service\Notification\BackofficeNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 final class UserShopProcessor implements ProcessorInterface
 {
@@ -27,8 +29,9 @@ final class UserShopProcessor implements ProcessorInterface
         private readonly UserRepository $users,
         private readonly BoutiqueRepository $boutiques,
         private readonly EntityManagerInterface $em,
-        private readonly Security $security,
         private readonly BoutiqueContext $boutiqueContext,
+        private readonly EmailVerificationService $emailVerification,
+        private readonly BackofficeNotificationService $notifications,
     ) {
     }
 
@@ -46,6 +49,7 @@ final class UserShopProcessor implements ProcessorInterface
         if (isset($uriVariables['id'])) {
             $entity = $this->findEntity((string) $uriVariables['id']);
             $this->assertAccessible($entity);
+            $oldStatus = $entity->getStatus();
             $this->applyInput($entity, $data);
         } else {
             /** @var UserShopResource $data */
@@ -79,6 +83,37 @@ final class UserShopProcessor implements ProcessorInterface
 
         $this->em->flush();
 
+        if (isset($oldStatus) && $oldStatus !== $entity->getStatus()) {
+            $isAdmin = 'ROLE_BOUTIQUE_ADMIN' === $entity->getRole();
+            $isSuspended = UserStatus::Suspended === $entity->getStatus();
+            $eventCode = $isAdmin
+                ? ($isSuspended ? 'boutique_admin.suspended' : 'boutique_admin.activated')
+                : ($isSuspended ? 'employee.suspended' : 'employee.activated');
+            $title = $isAdmin
+                ? ($isSuspended ? 'Accès administrateur suspendu' : 'Accès administrateur activé')
+                : ($isSuspended ? 'Accès employé suspendu' : 'Accès employé activé');
+            $reason = is_object($data) && property_exists($data, 'reason') ? trim((string) ($data->reason ?? '')) : '';
+            $message = sprintf(
+                'Votre accès à la boutique "%s" a été %s.%s',
+                $entity->getBoutique()->getName(),
+                $isSuspended ? 'suspendu' : 'activé',
+                $reason ? ' Motif : '.$reason : '',
+            );
+            $this->notifications->notifyUser(
+                $entity->getUser(),
+                $entity->getBoutique(),
+                str_replace('.', '_', $eventCode),
+                $title,
+                $message,
+                $eventCode,
+                $reason ? ['reason' => $reason] : [],
+            );
+        }
+
+        if (!$entity->getUser()->isEmailVerified() && in_array($entity->getRole(), ['ROLE_BOUTIQUE_ADMIN', 'ROLE_CAISSIER', 'ROLE_EMPLOYEE'], true)) {
+            $this->emailVerification->issue($entity->getUser(), $entity->getBoutique());
+        }
+
         return $this->toOutput($entity);
     }
 
@@ -91,7 +126,12 @@ final class UserShopProcessor implements ProcessorInterface
             $entity->setRole($input->role);
         }
         if (null !== $input->status) {
-            $entity->setStatus(UserStatus::from($input->status));
+            $status = UserStatus::tryFrom($input->status);
+            if (!$status instanceof UserStatus) {
+                throw new BadRequestHttpException('Invalid user status.');
+            }
+
+            $entity->setStatus($status);
         }
     }
 

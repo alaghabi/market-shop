@@ -12,6 +12,7 @@ const defaultNav: NavItem[] = [
   { slug: 'modules', title: 'Modules', path: '/admin/modules', section: 'Administration', description: 'Modules globaux et par boutique', icon: 'puzzle', permissions: ['ROLE_SUPER_ADMIN'] },
   { slug: 'notifications', title: 'Notifications', path: '/admin/notifications', section: 'Administration', description: 'Toutes les notifications', icon: 'bell', permissions: ['ROLE_SUPER_ADMIN', 'ROLE_BOUTIQUE_ADMIN', 'ROLE_CAISSIER'] },
   { slug: 'themes', title: 'Thèmes', path: '/admin/themes', section: 'Administration', description: 'Thèmes disponibles sur la plateforme', icon: 'palette', permissions: ['ROLE_SUPER_ADMIN'] },
+  { slug: 'platform-settings', title: 'Réseaux plateforme', path: '/admin/platform-settings', section: 'Administration', description: 'Réseaux sociaux officiels de Hanooti', icon: 'globe', permissions: ['ROLE_SUPER_ADMIN'] },
   { slug: 'products', title: 'Produits', path: '/admin/products', section: 'Catalogue', description: 'Gestion des produits', icon: 'box', permissions: ['ROLE_BOUTIQUE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_CAISSIER'], requiredPermissions: ['product.read', 'view_products'] },
   { slug: 'categories', title: 'Catégories', path: '/admin/categories', section: 'Catalogue', description: 'Catégories de produits', icon: 'list', permissions: ['ROLE_BOUTIQUE_ADMIN', 'ROLE_SUPER_ADMIN'], requiredPermissions: ['product.category.manage'] },
   { slug: 'filters', title: 'Filtres', path: '/admin/filters', section: 'Catalogue', description: 'Filtres produits', icon: 'filter', permissions: ['ROLE_BOUTIQUE_ADMIN', 'ROLE_SUPER_ADMIN'], requiredPermissions: ['product.update', 'edit_products'] },
@@ -51,8 +52,9 @@ function NavIcon({ icon }: { icon: string }) {
      bell: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9a6 6 0 00-12 0v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>,
      lightbulb: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75m6.375-2.846L16.5 18.75M9 21h6m-7.5-3.75h9M12 3a6.75 6.75 0 00-3.75 12.363V16.5h7.5v-1.137A6.75 6.75 0 0012 3z" /></svg>,
     activity: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>,
-  };
-  return <>{icons[icon] ?? icons.box}</>;
+     globe: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c2.071-2.257 3.25-5.38 3.25-9S14.071 5.257 12 3m0 18c-2.071-2.257-3.25-5.38-3.25-9S9.929 5.257 12 3m-8.25 9h16.5" /></svg>,
+   };
+   return <>{icons[icon] ?? icons.box}</>;
 }
 
 export function Sidebar({

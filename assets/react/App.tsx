@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { LoginPage } from './auth/LoginPage';
 import { PasswordResetConfirmPage, PasswordResetRequestPage } from './auth/PasswordResetPages';
+import { EmailVerificationPage } from './auth/EmailVerificationPage';
 import { useAuth } from './auth/useAuth';
 import { appIcons } from './icons/fontAwesome';
 import { Badge, Button, Card, Select } from './components/ui';
@@ -11,7 +12,6 @@ import { ApplicationReviewsPage } from './pages/application-reviews';
 import { BoutiqueCentralRoutePage } from './pages/boutique-central';
 import { ActiveBoutiquesPage } from './pages/boutiques';
 import { CartRoutePage } from './pages/cart';
-import { ChatbotPreviewRoutePage } from './pages/chatbot-preview';
 import { CheckoutRoutePage } from './pages/checkout';
 import { HomePage } from './pages/home';
 import { MarketplaceRoutePage } from './pages/marketplace';
@@ -130,14 +130,14 @@ export function App() {
 }
 
 function AppRoutes() {
-  const { user, isLoading, signIn, signUp, signOut, getAccessToken } = useAuth();
+  const { user, isLoading, signIn, signInWithProvider, signUp, signOut, getAccessToken } = useAuth();
   const { theme } = useBoutiqueTheme();
   const location = useLocation();
   const { data: routesData } = useApiData<{ publicRoutes: RouteConfig[]; adminRoutes: RouteConfig[] }>('/api/routes');
   const publicRoutes = routesData?.publicRoutes ?? [];
   const adminRoutes = routesData?.adminRoutes ?? [];
   const userRoles = user?.profile.roles ?? [];
-  const canAccessBackOffice = userRoles.some((role) => ['ROLE_SUPER_ADMIN', 'ROLE_BOUTIQUE_ADMIN', 'ROLE_CAISSIER'].includes(role));
+  const canAccessBackOffice = userRoles.some((role) => ['ROLE_SUPER_ADMIN', 'ROLE_BOUTIQUE_ADMIN', 'ROLE_CAISSIER', 'ROLE_EMPLOYEE'].includes(role));
   const subdomainSlug = isBoutiqueSubdomain();
   const route = resolveRoute(location.pathname, publicRoutes, adminRoutes);
 
@@ -151,10 +151,10 @@ function AppRoutes() {
     }
 
     if (!user) {
-      return <LoginPage onSignIn={signIn} onSignUp={signUp} />;
+      return <LoginPage onSignIn={signIn} onSignInWithProvider={signInWithProvider} onSignUp={signUp} />;
     }
 
-    const allowedRoles = ['ROLE_SUPER_ADMIN', 'ROLE_BOUTIQUE_ADMIN', 'ROLE_CAISSIER'];
+    const allowedRoles = ['ROLE_SUPER_ADMIN', 'ROLE_BOUTIQUE_ADMIN', 'ROLE_CAISSIER', 'ROLE_EMPLOYEE'];
     const hasBackOfficeAccess = user.profile.roles.some((role) => allowedRoles.includes(role));
 
     if (!hasBackOfficeAccess) {
@@ -177,10 +177,11 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Navigate to="/auth/login" replace />} />
       <Route path="/register" element={<Navigate to="/auth/register" replace />} />
-      <Route path="/auth/login" element={<LoginPage onSignIn={signIn} onSignUp={signUp} initialMode="login" />} />
-      <Route path="/auth/register" element={<LoginPage onSignIn={signIn} onSignUp={signUp} initialMode="register" />} />
-      <Route path="/auth/forgot-password" element={<PasswordResetRequestPage />} />
-      <Route path="/auth/reset-password" element={<PasswordResetConfirmPage />} />
+      <Route path="/auth/login" element={subdomainSlug ? <Navigate to="/client/login" replace /> : <LoginPage onSignIn={signIn} onSignInWithProvider={signInWithProvider} onSignUp={signUp} initialMode="login" />} />
+      <Route path="/auth/register" element={subdomainSlug ? <Navigate to="/client/register" replace /> : <LoginPage onSignIn={signIn} onSignInWithProvider={signInWithProvider} onSignUp={signUp} initialMode="register" />} />
+      <Route path="/auth/forgot-password" element={subdomainSlug ? <Navigate to="/client/forgot-password" replace /> : <PasswordResetRequestPage />} />
+      <Route path="/auth/reset-password" element={subdomainSlug ? <Navigate to="/client/reset-password" replace /> : <PasswordResetConfirmPage />} />
+      <Route path="/auth/verify-email" element={<EmailVerificationPage />} />
       {!subdomainSlug && <Route path="/avis" element={<ApplicationReviewsPage />} />}
       <Route path="/suggestions" element={<SuggestionsPage />} />
       <Route path="/admin/suggestions" element={renderAdminRoute({ slug: 'suggestions', title: 'Boîte à suggestions', path: '/admin/suggestions', section: 'Admin', description: 'Gestion des suggestions', icon: 'dashboard', access: 'admin' })} />
@@ -269,10 +270,6 @@ function PublicPage({ route, canAccessBackOffice }: { route: RouteConfig; canAcc
 
   if (route.slug === 'admin-home') {
     return <BoutiqueCentralRoutePage title={route.title} description={route.description} />;
-  }
-
-  if (route.slug === 'front-chatbot') {
-    return <ChatbotPreviewRoutePage title={route.title} description={route.description} />;
   }
 
   if (route.slug === 'boutique-storefront') {

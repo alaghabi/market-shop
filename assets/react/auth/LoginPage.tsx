@@ -1,13 +1,15 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import type { RegisterPayload } from './AuthProvider';
+import type { RegisterPayload, RegistrationResult } from './AuthProvider';
 import { appIcons } from '../icons/fontAwesome';
 import { BrandLogo } from '../components/BrandLogo';
+import { SOCIAL_PROVIDERS, type SocialProvider } from './socialProviders';
 
 type LoginPageProps = {
   onSignIn: (email: string, password: string) => Promise<void>;
-  onSignUp: (payload: RegisterPayload) => Promise<void>;
+  onSignInWithProvider?: (provider?: SocialProvider) => Promise<void>;
+  onSignUp: (payload: RegisterPayload) => Promise<RegistrationResult>;
   initialMode?: 'login' | 'register';
 };
 
@@ -27,7 +29,7 @@ function getCollection<T>(payload: CollectionPayload<T>): T[] {
   return Array.isArray(payload) ? payload : payload.member ?? payload.items ?? [];
 }
 
-export function LoginPage({ onSignIn, onSignUp, initialMode = 'login' }: LoginPageProps) {
+export function LoginPage({ onSignIn, onSignInWithProvider, onSignUp, initialMode = 'login' }: LoginPageProps) {
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,6 +39,7 @@ export function LoginPage({ onSignIn, onSignUp, initialMode = 'login' }: LoginPa
   const [boutiqueSlug, setBoutiqueSlug] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [publicBoutiquesCount, setPublicBoutiquesCount] = useState<number | null>(null);
   const [publicReviewsCount, setPublicReviewsCount] = useState<number | null>(null);
@@ -72,13 +75,16 @@ export function LoginPage({ onSignIn, onSignUp, initialMode = 'login' }: LoginPa
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setSuccess(null);
     setIsSubmitting(true);
 
     try {
       if ('login' === mode) {
         await onSignIn(email, password);
       } else {
-        await onSignUp({ email, password, displayName, boutiqueName, boutiqueSlug });
+        const result = await onSignUp({ email, password, displayName, boutiqueName, boutiqueSlug });
+        setSuccess(result.message);
+        setMode('login');
       }
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : 'Action impossible.');
@@ -127,6 +133,42 @@ export function LoginPage({ onSignIn, onSignUp, initialMode = 'login' }: LoginPa
               <button type="button" className={!isRegister ? 'is-active' : ''} onClick={() => setMode('login')}>Connexion</button>
               <button type="button" className={isRegister ? 'is-active' : ''} onClick={() => setMode('register')}>Inscription</button>
             </div>
+
+            {onSignInWithProvider && !isRegister && (
+              <div className="lovable-auth__social-login">
+                <button
+                  type="button"
+                  className="lovable-auth__keycloak"
+                  onClick={() => {
+                    setError(null);
+                    void onSignInWithProvider().catch((exception: unknown) => {
+                      setError(exception instanceof Error ? exception.message : 'Connexion SSO impossible.');
+                    });
+                  }}
+                >
+                  Continuer avec Hanooti SSO
+                </button>
+                <div className="lovable-auth__social-divider" aria-hidden="true"><span>ou continuer avec</span></div>
+                <div className="lovable-auth__social-grid" aria-label="Connexion avec un fournisseur externe">
+                  {SOCIAL_PROVIDERS.map((provider) => (
+                    <button
+                      key={provider.id}
+                      type="button"
+                      className="lovable-auth__social-button"
+                      onClick={() => {
+                        setError(null);
+                        void onSignInWithProvider(provider.id).catch((exception: unknown) => {
+                          setError(exception instanceof Error ? exception.message : `Connexion ${provider.label} impossible.`);
+                        });
+                      }}
+                    >
+                      <FontAwesomeIcon icon={appIcons[provider.icon as keyof typeof appIcons]} aria-hidden="true" />
+                      <span>{provider.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <form className="lovable-auth__form" onSubmit={submit}>
               <label>
@@ -192,6 +234,7 @@ export function LoginPage({ onSignIn, onSignUp, initialMode = 'login' }: LoginPa
               </div>
 
               {error && <div className="lovable-auth__error">{error}</div>}
+              {success && <div className="lovable-auth__success">{success}</div>}
 
               <button type="submit" disabled={isSubmitting} className="lovable-button lovable-auth__submit">
                 <FontAwesomeIcon icon={isRegister ? appIcons.plus : appIcons.login} />

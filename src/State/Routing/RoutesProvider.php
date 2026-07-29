@@ -34,15 +34,6 @@ final class RoutesProvider implements ProviderInterface
                     'access' => 'public',
                 ],
                 [
-                    'slug' => 'front-chatbot',
-                    'title' => 'Assistant boutique',
-                    'path' => '/chatbot',
-                    'section' => 'Public',
-                    'description' => 'Chatbot front-office pour assister les clients.',
-                    'icon' => 'users',
-                    'access' => 'public',
-                ],
-                [
                     'slug' => 'boutique-storefront',
                     'title' => 'Boutique - Vitrine personnalisée',
                     'path' => '/boutiques/luxe-paris',

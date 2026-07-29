@@ -1,6 +1,7 @@
 import { getStoredAccessToken } from '../../auth/getStoredAccessToken';
+import { getKeycloakAccessToken } from '../../auth/keycloakClient';
 
-const EXCLUDED_SUBDOMAINS = ['www', 'admin', 'backoffice', 'app', 'mail', 'staging', 'dev'];
+const EXCLUDED_SUBDOMAINS = ['www', 'api', 'admin', 'auth', 'backoffice', 'app', 'mail', 'staging', 'dev'];
 
 export function resolveBoutiqueSlug(pathPattern: RegExp): string {
   const pathSlug = window.location.pathname.match(pathPattern)?.[1];
@@ -45,7 +46,7 @@ export function boutiqueQuery(slug: string): string {
 }
 
 export function authHeaders(): HeadersInit | undefined {
-  const token = getStoredAccessToken();
+  const token = getKeycloakAccessToken() ?? getStoredAccessToken();
 
   return token ? { Authorization: `Bearer ${token}` } : undefined;
 }

@@ -1,0 +1,152 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: app_test
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d app_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_ENV: test
+      APP_SECRET: test-secret
+      DATABASE_URL: postgresql://app:app@127.0.0.1:5432/app_test?serverVersion=16&charset=utf8
+      MESSENGER_HIGH_DSN: in-memory://
+      MESSENGER_WEBHOOK_DSN: in-memory://
+      MESSENGER_CHATBOT_DSN: in-memory://
+      MESSENGER_LOGISTICS_DSN: in-memory://
+      MESSENGER_FAILED_DSN: in-memory://
+      MAILER_DSN: null://null
+      MAILER_FROM: no-reply@hanooti.local
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: intl, pdo_pgsql, redis, zip, pcov
+          tools: composer:v2
+          coverage: pcov
+          ini-values: memory_limit=512M
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Create test schema
+        run: php bin/console doctrine:schema:create --env=test --no-interaction
+
+      - name: Load test fixtures
+        run: php bin/console doctrine:fixtures:load --env=test --no-interaction
+
+      - name: Validate Doctrine schema
+        run: php bin/console doctrine:schema:validate --skip-sync --env=test --no-interaction
+
+      - name: Lint Symfony container
+        run: php bin/console lint:container --env=test --no-debug
+
+      - name: Check PHP style
+        run: composer cs-check
+
+      - name: Run PHPUnit
+        run: composer test
+
+      - name: Upload PHPUnit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phpunit-results
+          if-no-files-found: ignore
+          path: |
+            var/log/phpunit.junit.xml
+            coverage/
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build frontend
+        run: npm run build
+
+  production-image:
+    name: Validate production image
+    needs:
+      - backend
+      - frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare non-secret production environment
+        run: |
+          printf '%s\n' \
+            'APP_ENV=prod' \
+            'APP_DEBUG=0' \
+            'APP_SECRET=ci-secret' \
+            'APP_PUBLIC_URL=https://hanooti.shop' \
+            'DEFAULT_URI=https://hanooti.shop' \
+            'ROOT_DOMAIN=hanooti.shop' \
+            'POSTGRES_DB=hanooti' \
+            'POSTGRES_USER=hanooti' \
+            'POSTGRES_PASSWORD=ci-database-password' \
+            'DATABASE_URL=postgresql://hanooti:ci-database-password@database:5432/hanooti?serverVersion=16&charset=utf8' \
+            'REDIS_PASSWORD=ci-redis-password' \
+            'MERCURE_PUBLIC_URL=https://hanooti.shop/.well-known/mercure' \
+            'MERCURE_JWT_SECRET=ci-mercure-secret' > .env.prod
+
+      - name: Validate Compose configuration
+        run: docker compose --env-file .env.prod -f docker-compose.prod.yml config --quiet
+
+      - name: Build production image
+        run: docker compose --env-file .env.prod -f docker-compose.prod.yml build app
+
+      - name: Remove temporary environment file
+        if: always()
+        run: rm -f .env.prod

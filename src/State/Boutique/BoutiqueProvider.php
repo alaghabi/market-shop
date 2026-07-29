@@ -13,6 +13,7 @@ use App\Repository\ChatbotConfigRepository;
 use App\Repository\CmsPageRepository;
 use App\Security\BoutiqueContext;
 use App\Service\Backoffice\BackofficeScopeResolver;
+use App\Service\Chat\ChatbotCapabilityService;
 use App\Service\Module\ModuleAccessService;
 use App\State\Common\BackofficePaginator;
 use Doctrine\ORM\EntityManagerInterface;
@@ -25,6 +26,7 @@ final class BoutiqueProvider implements ProviderInterface
         private readonly BoutiqueContext $context,
         private readonly ModuleAccessService $moduleAccess,
         private readonly ChatbotConfigRepository $chatbotConfigs,
+        private readonly ChatbotCapabilityService $chatbotCapability,
         private readonly CmsPageRepository $cmsPages,
         private readonly EntityManagerInterface $em,
         private readonly BackofficeScopeResolver $scope,
@@ -113,8 +115,9 @@ final class BoutiqueProvider implements ProviderInterface
         $moduleConfig = $entity->getSettings()?->getModuleConfig() ?? [];
         $output->customerAccountsEnabled = $this->moduleAccess->isModuleEnabled('customer_auth', $entity)
             && (!array_key_exists('enable_customer_auth', $moduleConfig) || true === (bool) $moduleConfig['enable_customer_auth']);
-        $output->chatbotEnabled = $this->moduleAccess->isModuleEnabled('chatbot', $entity)
-            && null !== $this->chatbotConfigs->findEnabledByBoutique($entity);
+        $chatbotConfig = $this->chatbotConfigs->findOneByBoutique($entity);
+        $output->chatbotEnabled = $this->chatbotCapability->isVisible($entity, $chatbotConfig);
+        $output->chatbotMode = $chatbotConfig?->getMode()->value ?? 'MANUAL';
 
         if ($output->analyticsEnabled) {
             $output->customersWithAccount = $this->countCustomers($entity, true);

@@ -1,0 +1,51 @@
+{
+  "realm": "hanooti",
+  "enabled": true,
+  "displayName": "Hanooti Development",
+  "roles": {
+    "realm": [
+      { "name": "SUPER_ADMIN", "description": "Platform administrator" },
+      { "name": "BOUTIQUE_ADMIN", "description": "Boutique administrator" },
+      { "name": "EMPLOYEE", "description": "Boutique employee" },
+      { "name": "CUSTOMER", "description": "Store customer" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "hanooti-api",
+      "name": "Hanooti API",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "hanooti-web",
+      "name": "Hanooti Web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8082/*",
+        "http://*.localhost:8082/*",
+        "http://demo-hanooti.localhost:8082/*",
+        "http://market-shop.localhost:8082/*",
+        "http://demo-beauty-lab.localhost:8082/*",
+        "http://demo-tech-corner.localhost:8082/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8082",
+        "http://*.localhost:8082",
+        "http://demo-hanooti.localhost:8082",
+        "http://market-shop.localhost:8082",
+        "http://demo-beauty-lab.localhost:8082",
+        "http://demo-tech-corner.localhost:8082"
+      ]
+    }
+  ]
+}

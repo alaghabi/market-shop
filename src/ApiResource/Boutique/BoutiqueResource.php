@@ -9,6 +9,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Dto\Boutique\BoutiqueInput;
+use App\Dto\Boutique\BoutiqueActionInput;
 use App\Dto\Boutique\BoutiqueOutput;
 use App\State\Boutique\BoutiqueProcessor;
 use App\State\Boutique\BoutiqueProvider;
@@ -45,7 +46,7 @@ use App\State\Boutique\BoutiqueProvider;
             name: 'approve_boutique',
             uriTemplate: '/boutiques/{id}/approve',
             security: "is_granted('ROLE_SUPER_ADMIN')",
-            input: false,
+            input: BoutiqueActionInput::class,
             output: BoutiqueOutput::class,
             processor: BoutiqueProcessor::class,
             provider: BoutiqueProvider::class,
@@ -54,7 +55,7 @@ use App\State\Boutique\BoutiqueProvider;
             name: 'reject_boutique',
             uriTemplate: '/boutiques/{id}/reject',
             security: "is_granted('ROLE_SUPER_ADMIN')",
-            input: false,
+            input: BoutiqueActionInput::class,
             output: BoutiqueOutput::class,
             processor: BoutiqueProcessor::class,
             provider: BoutiqueProvider::class,
@@ -63,7 +64,7 @@ use App\State\Boutique\BoutiqueProvider;
             name: 'suspend_boutique',
             uriTemplate: '/boutiques/{id}/suspend',
             security: "is_granted('ROLE_SUPER_ADMIN')",
-            input: false,
+            input: BoutiqueActionInput::class,
             output: BoutiqueOutput::class,
             processor: BoutiqueProcessor::class,
             provider: BoutiqueProvider::class,
@@ -72,7 +73,7 @@ use App\State\Boutique\BoutiqueProvider;
             name: 'activate_boutique',
             uriTemplate: '/boutiques/{id}/activate',
             security: "is_granted('ROLE_SUPER_ADMIN')",
-            input: false,
+            input: BoutiqueActionInput::class,
             output: BoutiqueOutput::class,
             processor: BoutiqueProcessor::class,
             provider: BoutiqueProvider::class,
@@ -81,7 +82,7 @@ use App\State\Boutique\BoutiqueProvider;
             name: 'archive_boutique',
             uriTemplate: '/boutiques/{id}/archive',
             security: "is_granted('ROLE_SUPER_ADMIN')",
-            input: false,
+            input: BoutiqueActionInput::class,
             output: BoutiqueOutput::class,
             processor: BoutiqueProcessor::class,
             provider: BoutiqueProvider::class,
@@ -90,7 +91,7 @@ use App\State\Boutique\BoutiqueProvider;
             name: 'publish_boutique',
             uriTemplate: '/boutiques/{id}/publish',
             security: "is_granted('ROLE_SUPER_ADMIN')",
-            input: false,
+            input: BoutiqueActionInput::class,
             output: BoutiqueOutput::class,
             processor: BoutiqueProcessor::class,
             provider: BoutiqueProvider::class,
@@ -99,7 +100,7 @@ use App\State\Boutique\BoutiqueProvider;
             name: 'unpublish_boutique',
             uriTemplate: '/boutiques/{id}/unpublish',
             security: "is_granted('ROLE_SUPER_ADMIN')",
-            input: false,
+            input: BoutiqueActionInput::class,
             output: BoutiqueOutput::class,
             processor: BoutiqueProcessor::class,
             provider: BoutiqueProvider::class,

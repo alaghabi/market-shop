@@ -18,10 +18,10 @@ use App\State\Catalog\ProductProvider;
     shortName: 'Product',
     operations: [
         new GetCollection(uriTemplate: '/products', output: ProductOutput::class, provider: ProductProvider::class),
-        new Post(uriTemplate: '/products', security: "is_granted('ROLE_BOUTIQUE_ADMIN')", read: false, input: ProductInput::class, output: ProductOutput::class, processor: ProductProcessor::class),
+        new Post(uriTemplate: '/products', security: "is_granted('ROLE_BOUTIQUE_ADMIN') and is_granted('PERMISSION', 'product.create')", read: false, input: ProductInput::class, output: ProductOutput::class, processor: ProductProcessor::class),
         new Get(uriTemplate: '/products/{id}', output: ProductOutput::class, provider: ProductProvider::class),
-        new Patch(uriTemplate: '/products/{id}', uriVariables: ['id' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id')], security: "is_granted('ROLE_BOUTIQUE_ADMIN')", read: false, input: ProductInput::class, output: ProductOutput::class, processor: ProductProcessor::class),
-        new Delete(uriTemplate: '/products/{id}', uriVariables: ['id' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id')], security: "is_granted('ROLE_BOUTIQUE_ADMIN')", read: false, processor: ProductProcessor::class),
+        new Patch(uriTemplate: '/products/{id}', uriVariables: ['id' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id')], security: "is_granted('ROLE_BOUTIQUE_ADMIN') and is_granted('PERMISSION', 'product.update')", read: false, input: ProductInput::class, output: ProductOutput::class, processor: ProductProcessor::class),
+        new Delete(uriTemplate: '/products/{id}', uriVariables: ['id' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id')], security: "is_granted('ROLE_BOUTIQUE_ADMIN') and is_granted('PERMISSION', 'product.delete')", read: false, processor: ProductProcessor::class),
     ],
 )]
 final class ProductResource

@@ -6,6 +6,7 @@ import { FloatingInfoChat } from '../../components/FloatingInfoChat';
 import { PublicHeader } from '../../components/PublicHeader';
 import { frontOfficeUrl } from '../../backoffice/utils/frontOfficeUrl';
 import { formatReviewDate, reviewInitial, usePlatformReviews } from '../application-reviews/platformReviews';
+import { PlatformSocialLinks } from '../../components/PlatformSocialLinks';
 
 type HomeBoutique = {
   name: string;
@@ -202,7 +203,7 @@ export function HomePage({ canAccessBackOffice, boutiques }: { canAccessBackOffi
       <footer className="lovable-footer">
         <div className="lovable-container">
           <div className="lovable-footer__top">
-             <div className="lovable-footer__brand"><Link className="lovable-brand" to="/"><BrandLogo /></Link><p>La plateforme de référence pour les commerçants indépendants cherchant excellence et efficacité.</p></div>
+             <div className="lovable-footer__brand"><Link className="lovable-brand" to="/"><BrandLogo /></Link><p>La plateforme de référence pour les commerçants indépendants cherchant excellence et efficacité.</p><PlatformSocialLinks className="lovable-footer__socials" itemClassName="lovable-footer__social-link" /></div>
              <FooterColumn title="Explorer" links={[{ label: 'Boutiques', href: '/boutiques' }, { label: 'Vendeurs', href: '/auth/register' }, { label: 'Catégories', href: '/#Boutiques' }]} />
              <FooterColumn title="Société" links={[{ label: 'À propos', href: '/#fonctionnement' }, { label: 'Contact', href: 'mailto:contact@hanooti.com' }, { label: 'Nouveautés', href: '/#nouveautes' }]} />
              <FooterColumn title="Légal" links={[{ label: 'CGV', href: 'mailto:contact@hanooti.com?subject=Demande%20CGV' }, { label: 'Confidentialité', href: 'mailto:contact@hanooti.com?subject=Question%20confidentialite' }, { label: 'Cookies', href: 'mailto:contact@hanooti.com?subject=Question%20cookies' }]} />

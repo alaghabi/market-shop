@@ -127,11 +127,14 @@ export function EmployeesPage({
 
   async function toggleStatus(employee: Employee): Promise<void> {
     const nextStatus = employee.status === "active" ? "suspended" : "active";
+    const reason = window.prompt("Motif de cette action :")?.trim();
+    if (!reason) return;
     setActionLoading(employee.id);
 
     try {
       await api.patch(`/admin/user-shops/${employee.id}`, {
         status: nextStatus,
+        reason,
       });
       showNotice(
         nextStatus === "active" ? "Employé activé." : "Employé désactivé.",

@@ -19,6 +19,7 @@ use App\Entity\Product;
 use App\Entity\ProductVariant;
 use App\Enum\OrderChannel;
 use App\Enum\OrderStatus;
+use App\Enum\PaymentMethodType;
 use App\Repository\PaymentMethodRepository;
 use App\Repository\ShopPaymentMethodRepository;
 use App\Repository\BoutiqueRepository;
@@ -456,9 +457,45 @@ final readonly class CartService
 
         $paymentsConfig = $this->appConfig->section('payments');
 
+        $visibleMethods = is_array($paymentsConfig['visible_methods'] ?? null) ? array_map('strtoupper', array_map('strval', $paymentsConfig['visible_methods'])) : [];
+        $shopPaymentConfig = $boutique->getSettings()?->getPaymentConfig() ?? [];
+        $availableMethods = array_values(array_filter(
+            $activeMethods,
+            static function ($candidate) use ($visibleMethods, $paymentsConfig, $shopPaymentConfig): bool {
+                $method = $candidate->getPaymentMethod();
+                $code = strtoupper($method->getCode());
+                if ([] !== $visibleMethods && !in_array($code, $visibleMethods, true)) {
+                    return false;
+                }
+                if (PaymentMethodType::CashOnDelivery->value === $code && false === ($paymentsConfig['cash_on_delivery_enabled'] ?? true)) {
+                    return false;
+                }
+                if (PaymentMethodType::CashOnDelivery->value === $code && array_key_exists('cod_enabled', $shopPaymentConfig) && false === (bool) $shopPaymentConfig['cod_enabled']) {
+                    return false;
+                }
+                if (PaymentMethodType::BankTransfer->value === $code && false === ($paymentsConfig['bank_transfer_enabled'] ?? true)) {
+                    return false;
+                }
+                if (!in_array($code, [PaymentMethodType::CashOnDelivery->value, PaymentMethodType::BankTransfer->value], true) && false === ($paymentsConfig['online_payment_enabled'] ?? true)) {
+                    return false;
+                }
+
+                return true;
+            },
+        ));
+        if ([] === $availableMethods) {
+            throw new BadRequestHttpException('Aucun moyen de paiement disponible pour cette boutique.');
+        }
+
         $paymentMethodCode = strtoupper(trim((string) $paymentMethodCode));
         if ('' === $paymentMethodCode) {
-            throw new BadRequestHttpException('Payment method is required.');
+            $paymentMethodCode = $availableMethods[0]->getPaymentMethod()->getCode();
+            foreach ($availableMethods as $candidate) {
+                if (PaymentMethodType::CashOnDelivery->value === strtoupper($candidate->getPaymentMethod()->getCode())) {
+                    $paymentMethodCode = $candidate->getPaymentMethod()->getCode();
+                    break;
+                }
+            }
         }
 
         $paymentMethod = $this->paymentMethods->findOneByCode($paymentMethodCode);
@@ -466,13 +503,15 @@ final readonly class CartService
             throw new BadRequestHttpException('Payment method is not available for this boutique.');
         }
 
-        $visibleMethods = is_array($paymentsConfig['visible_methods'] ?? null) ? array_map('strtoupper', array_map('strval', $paymentsConfig['visible_methods'])) : [];
         if ([] !== $visibleMethods && !in_array($paymentMethodCode, $visibleMethods, true)) {
             throw new BadRequestHttpException('Payment method is disabled globally.');
         }
 
         if ('CASH_ON_DELIVERY' === $paymentMethodCode && !($paymentsConfig['cash_on_delivery_enabled'] ?? true)) {
             throw new BadRequestHttpException('Cash on delivery is disabled globally.');
+        }
+        if (PaymentMethodType::CashOnDelivery->value === $paymentMethodCode && array_key_exists('cod_enabled', $shopPaymentConfig) && false === (bool) $shopPaymentConfig['cod_enabled']) {
+            throw new BadRequestHttpException('Cash on delivery is disabled for this boutique.');
         }
         if ('BANK_TRANSFER' === $paymentMethodCode && !($paymentsConfig['bank_transfer_enabled'] ?? true)) {
             throw new BadRequestHttpException('Bank transfer is disabled globally.');

@@ -5,7 +5,9 @@ namespace App\MessageHandler;
 use App\Entity\BoutiqueDeliveryAccount;
 use App\Entity\Order;
 use App\Message\CreateShipmentMessage;
+use App\Repository\ShipmentRepository;
 use App\Service\Delivery\DeliveryEngine;
+use App\Service\Delivery\DeliveryOutcomeNotifier;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
@@ -15,6 +17,8 @@ final class CreateShipmentMessageHandler
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly DeliveryEngine $engine,
+        private readonly ShipmentRepository $shipments,
+        private readonly DeliveryOutcomeNotifier $outcomes,
     ) {
     }
 
@@ -30,6 +34,7 @@ final class CreateShipmentMessageHandler
             $account = $this->em->find(BoutiqueDeliveryAccount::class, $message->getAccountId());
         }
 
-        $this->engine->createShipmentForOrder($order, $account instanceof BoutiqueDeliveryAccount ? $account : null);
+        $result = $this->engine->createShipmentForOrder($order, $account instanceof BoutiqueDeliveryAccount ? $account : null);
+        $this->outcomes->shipmentProcessed($order, $this->shipments->findOneByOrder($order), $result);
     }
 }

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="fr">
+<body style="margin:0;background:#f4f6f8;padding:24px;font-family:{{ fontFamily }};font-size:{{ fontSize }};color:#172033">
+<div style="max-width:620px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:{{ borderRadius }};overflow:hidden">
+    <header style="padding:24px;background:{{ primaryColor }};color:#fff;text-align:center">
+        {% if logoUrl %}<img src="{{ logoUrl }}" alt="{{ boutiqueName }}" style="max-height:54px;max-width:220px;object-fit:contain">{% endif %}
+        <div style="font-size:20px;font-weight:700;margin-top:8px">{{ boutiqueName }}</div>
+        {% if slogan %}<div style="font-size:13px;opacity:.86;margin-top:4px">{{ slogan }}</div>{% endif %}
+    </header>
+    <main style="padding:28px;line-height:1.6">{% block content %}{% endblock %}</main>
+    <footer style="padding:18px 28px;background:{{ secondaryColor }};color:#fff;font-size:12px;text-align:center">
+        {{ footerText }}
+    </footer>
+</div>
+</body>
+</html>

@@ -26,6 +26,8 @@ import { BoutiqueMetrics } from './BoutiqueMetrics';
 import { FavoritesPopover } from './FavoritesPopover';
 import { OrderTrackingModal } from './OrderTrackingModal';
 import { resolveSectionTitle, resolveStorefrontHero, resolveStorefrontNavigation, type StorefrontContent } from './content';
+import { SocialLinks } from '../../../components/SocialLinks';
+import { sanitizeCmsHtml } from './sanitizeCmsHtml';
 
 /** Brand accent used for CTAs/badges — falls back to the editorial black when a boutique has no custom color. */
 const BRAND = 'var(--sf-accent, var(--ds-primary, #111111))';
@@ -91,6 +93,7 @@ export type StoreBoutique = StorefrontContent & {
   viewsEnabled?: boolean;
   customerAccountsEnabled?: boolean;
   chatbotEnabled?: boolean;
+  chatbotMode?: 'MANUAL' | 'AI';
   customersWithAccount?: number;
   customersWithoutAccount?: number;
   publicOrdersCount?: number;
@@ -123,26 +126,6 @@ type StoreCmsPage = {
   content?: string | null;
   publishedAt?: string | null;
 };
-
-function sanitizeCmsHtml(value: string): string {
-  if (typeof document === 'undefined') return value;
-
-  const template = document.createElement('template');
-  template.innerHTML = value;
-  template.content.querySelectorAll('script, iframe, object, embed, style').forEach((node) => node.remove());
-  template.content.querySelectorAll<HTMLElement>('*').forEach((element) => {
-    [...element.attributes].forEach((attribute) => {
-      if (attribute.name.toLowerCase().startsWith('on')) {
-        element.removeAttribute(attribute.name);
-      }
-      if (['href', 'src', 'action'].includes(attribute.name.toLowerCase()) && /^(javascript|data):/i.test(attribute.value.trim())) {
-        element.removeAttribute(attribute.name);
-      }
-    });
-  });
-
-  return template.innerHTML;
-}
 
 function CmsPageView({ page, loading }: { page: StoreCmsPage | null; loading: boolean }) {
   if (loading) return <div className="mx-auto max-w-4xl px-4 py-20 text-center text-black/60">Chargement de la page...</div>;
@@ -434,7 +417,7 @@ export function StorefrontTheme({
               <Search className="h-4 w-4" />
              </button>}
              {boutique.wishlistEnabled === true && <FavoritesPopover boutiqueSlug={boutique.slug} favoriteCount={favoriteProductIds.length} onRefresh={onFavoritesRefresh} />}
-             {headerConfig.show_account !== false && boutique.customerAccountsEnabled !== false && <BoutiqueAccountLink boutiqueSlug={boutique.slug} />}
+              {headerConfig.show_account !== false && boutique.customerAccountsEnabled === true && <BoutiqueAccountLink boutiqueSlug={boutique.slug} />}
              {headerConfig.show_cart !== false && <CartSheet items={cart} onSetQty={handleSetQty} onRemove={handleRemove} />}
           </div>
         </div>
@@ -744,9 +727,16 @@ export function StorefrontTheme({
               </div>
             </div>
              <p className="mt-5 max-w-sm text-sm leading-7 text-white/62">
-               {footerText}
-             </p>
-          </div>
+                {footerText}
+              </p>
+              {footerConfig.show_social_links !== false && (
+                <SocialLinks
+                  links={boutique.socialLinks}
+                  className="mt-5 flex flex-wrap items-center gap-3"
+                  itemClassName="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-white/70 transition hover:-translate-y-0.5 hover:border-white/50 hover:text-white"
+                />
+              )}
+           </div>
 
           <FooterLinks title="Boutique" links={[
             { label: 'Catalogue', href: boutiqueLink('/catalogue') },

@@ -1,7 +1,7 @@
-# Delivery processing is intentionally frequent; each command is idempotent.
-*/1 * * * * cd /app && php bin/console app:delivery-process --no-interaction >> /proc/1/fd/1 2>> /proc/1/fd/2
+# Delivery creation is asynchronous through Messenger; retries and tracking remain periodic.
 */5 * * * * cd /app && php bin/console app:delivery-retry --no-interaction >> /proc/1/fd/1 2>> /proc/1/fd/2
 */5 * * * * cd /app && php bin/console app:delivery-tracking-sync --no-interaction >> /proc/1/fd/1 2>> /proc/1/fd/2
+*/5 * * * * cd /app && php bin/console app:keycloak:sync-redirect-uris --no-interaction >> /proc/1/fd/1 2>> /proc/1/fd/2
 
 # Billing and extension housekeeping runs once per day.
 5 2 * * * cd /app && php bin/console app:subscription-expiry --no-interaction >> /proc/1/fd/1 2>> /proc/1/fd/2

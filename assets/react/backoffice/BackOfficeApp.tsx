@@ -1,5 +1,5 @@
 import { useState, useEffect, type JSX } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { Shell } from './layout/Shell';
 import { BoutiqueCtx } from './hooks/useBoutique';
 import { NotificationProvider } from './hooks/useNotification';
@@ -31,6 +31,7 @@ import { ModulesPage } from './pages/modules/ModulesPage';
 import { NotificationsPage } from './pages/notifications/NotificationsPage';
 import { ThemesPage } from './pages/themes/ThemesPage';
 import { SuggestionsPage } from './pages/suggestions/SuggestionsPage';
+import { PlatformSettingsPage } from './pages/platform-settings/PlatformSettingsPage';
 import { AnnouncementsPage } from './pages/announcements/AnnouncementsPage';
 import { AnnouncementFormPage } from './pages/announcements/AnnouncementFormPage';
 import { Card, CardBody } from './components/Card';
@@ -39,11 +40,8 @@ import type { BackOfficeAccess, Boutique } from './types';
 
 type PageProps = { getAccessToken: () => string | null; userRoles?: string[]; boutiqueId?: string; productId?: string };
 type RouteGate = { moduleAliases?: string[]; permissions?: string[]; roles?: string[]; sensitive?: boolean };
-const authStorageKey = 'market-shop.auth';
-
 function handleUnauthorized(response: Response): Response {
   if (response.status === 401) {
-    window.localStorage.removeItem(authStorageKey);
     window.location.assign('/auth/login');
   }
 
@@ -68,6 +66,7 @@ const routeGates: Record<string, RouteGate> = {
   'announcement-edit': { permissions: ['cms.banner.manage', 'annonces', 'announcements'] },
   reviews: { moduleAliases: ['reviews'], permissions: ['review.read', 'view_reviews'] },
   chat: { roles: ['ROLE_SUPER_ADMIN', 'ROLE_BOUTIQUE_ADMIN', 'ROLE_CAISSIER'] },
+  'chatbot-config': { roles: ['ROLE_SUPER_ADMIN', 'ROLE_BOUTIQUE_ADMIN'] },
   cms: { moduleAliases: ['cms', 'blog'], permissions: ['cms.page.read', 'cms_access', 'cms', 'blog'] },
   appearance: { permissions: ['shop.appearance.manage', 'shop.settings.manage'], sensitive: true },
   theme: { permissions: ['shop.appearance.manage', 'shop.settings.manage'], sensitive: true },
@@ -84,6 +83,7 @@ const routeGates: Record<string, RouteGate> = {
   modules: { roles: ['ROLE_SUPER_ADMIN'] },
   notifications: { roles: ['ROLE_SUPER_ADMIN', 'ROLE_BOUTIQUE_ADMIN', 'ROLE_CAISSIER'] },
   themes: { roles: ['ROLE_SUPER_ADMIN'] },
+  'platform-settings': { roles: ['ROLE_SUPER_ADMIN'] },
   suggestions: { permissions: ['suggestion.read'] },
 };
 
@@ -106,6 +106,7 @@ function resolvePage(slug: string, props: PageProps) {
     'announcement-edit': (p) => <AnnouncementFormPage getAccessToken={p.getAccessToken} announcementId={p.productId} />,
     reviews: (p) => <ReviewsPage {...p} />,
     chat: (p) => <ChatPage {...p} />,
+    'chatbot-config': () => <Navigate to="/admin/chat" replace />,
     cms: (p) => <CmsManagementPage {...p} />,
     appearance: (p) => <FrontOfficePage {...p} />,
     theme: (p) => <FrontOfficePage {...p} />,
@@ -122,6 +123,7 @@ function resolvePage(slug: string, props: PageProps) {
     modules: (p) => <ModulesPage {...p} />,
     notifications: (p) => <NotificationsPage {...p} />,
     themes: (p) => <ThemesPage {...p} />,
+    'platform-settings': (p) => <PlatformSettingsPage {...p} />,
     suggestions: (p) => <SuggestionsPage {...p} />,
   };
   return pages[slug]?.(props) ?? <DashboardPage {...props} />;

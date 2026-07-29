@@ -25,9 +25,14 @@ final class OrderOutput
     public ?string $shippingGovernorate = null;
     public ?string $shippingLocality = null;
     public ?string $deliveryStatus = null;
+    public ?string $deliveryError = null;
     public string $paymentStatus = 'pending';
     public ?string $paymentMethodCode = null;
     public ?string $deliveryTracking = null;
+    public ?string $shipmentId = null;
+    public ?string $shipmentStatus = null;
+    public ?string $deliveryCompanyName = null;
+    public ?string $deliveryLabelUrl = null;
     public ?string $deliveredAt = null;
     public \DateTimeImmutable $createdAt;
     public \DateTimeImmutable $updatedAt;

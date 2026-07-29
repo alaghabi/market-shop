@@ -16,6 +16,8 @@ use App\Repository\ShipmentRepository;
 use App\Security\BoutiqueContext;
 use App\Service\Audit\AuditLogService;
 use App\Service\Delivery\DeliveryEngine;
+use App\Service\Delivery\DeliveryOutcomeNotifier;
+use App\Service\Delivery\DeliveryPaymentPolicy;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -34,6 +36,8 @@ final class ShipmentProcessor implements ProcessorInterface
         private readonly MessageBusInterface $bus,
         private readonly AuditLogService $auditLog,
         private readonly Security $security,
+        private readonly DeliveryPaymentPolicy $paymentPolicy,
+        private readonly DeliveryOutcomeNotifier $outcomes,
     ) {
     }
 
@@ -55,7 +59,7 @@ final class ShipmentProcessor implements ProcessorInterface
     {
         [$order, $account] = $this->resolveOrderAndAccount($input);
 
-        $this->engine->createShipmentForOrder($order, $account);
+        $result = $this->engine->createShipmentForOrder($order, $account);
 
         $shipment = $this->repository->findOneByOrder($order);
         if (!$shipment instanceof Shipment) {
@@ -63,6 +67,7 @@ final class ShipmentProcessor implements ProcessorInterface
         }
 
         $this->audit('shipment.create', $shipment);
+        $this->outcomes->shipmentProcessed($order, $shipment, $result);
 
         return $this->provider->toOutput($shipment);
     }
@@ -93,6 +98,10 @@ final class ShipmentProcessor implements ProcessorInterface
             throw new AccessDeniedHttpException('Access denied');
         }
 
+        if (!$this->paymentPolicy->canSubmit($order)) {
+            throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException('La commande doit être payée avant son envoi au transporteur.');
+        }
+
         $account = null;
         if (null !== $input->accountId) {
             $account = $this->em->find(BoutiqueDeliveryAccount::class, $input->accountId);
@@ -113,8 +122,13 @@ final class ShipmentProcessor implements ProcessorInterface
     private function track(string $id): ShipmentOutput
     {
         $shipment = $this->findOwnedShipment($id);
-        $this->engine->trackShipment($shipment);
+        $previousStatus = $shipment->getStatus();
+        $result = $this->engine->trackShipment($shipment);
         $this->audit('shipment.track', $shipment);
+        $this->outcomes->publishShipmentUpdate($shipment->getOrder(), $shipment, $result, 'shipment.tracking');
+        if ($previousStatus !== $shipment->getStatus() && \App\Enum\ShipmentStatus::Delivered === $shipment->getStatus()) {
+            $this->outcomes->shipmentDelivered($shipment);
+        }
 
         return $this->provider->toOutput($shipment);
     }
@@ -122,8 +136,9 @@ final class ShipmentProcessor implements ProcessorInterface
     private function label(string $id): ShipmentOutput
     {
         $shipment = $this->findOwnedShipment($id);
-        $this->engine->getLabel($shipment);
+        $result = $this->engine->getLabel($shipment);
         $this->audit('shipment.label', $shipment);
+        $this->outcomes->publishShipmentUpdate($shipment->getOrder(), $shipment, $result, 'shipment.label');
 
         return $this->provider->toOutput($shipment);
     }

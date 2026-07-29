@@ -3,8 +3,8 @@
 namespace App\Controller\Rest\Admin;
 
 use App\Repository\BoutiqueRepository;
-use App\Repository\RolePermissionRepository;
 use App\Security\BoutiqueContext;
+use App\Security\Permission\PermissionAccessService;
 use App\Service\Dashboard\DashboardService;
 use App\Service\Module\ModuleAccessService;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -23,7 +23,7 @@ final class DashboardController extends AbstractController
         private BoutiqueContext $context,
         private ParameterBagInterface $parameterBag,
         private ModuleAccessService $moduleAccess,
-        private RolePermissionRepository $rolePermissions,
+        private PermissionAccessService $permissionAccess,
         private Security $security,
     ) {
     }
@@ -89,16 +89,11 @@ final class DashboardController extends AbstractController
         }
 
         $roles = method_exists($this->security->getUser(), 'getRoles') ? $this->security->getUser()->getRoles() : [];
-        $permissions = [];
-        foreach ($roles as $role) {
-            foreach ($this->rolePermissions->findByRole($role) as $rolePermission) {
-                $permissions[$rolePermission->getPermission()] = true;
-            }
-        }
+        $permissions = $this->permissionAccess->getPermissions($boutique);
 
         return new JsonResponse([
             'modules' => $modules,
-            'permissions' => array_keys($permissions),
+            'permissions' => $permissions,
             'roles' => $roles,
         ]);
     }

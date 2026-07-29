@@ -10,10 +10,10 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'app:create-super-admin', description: 'Ensure the static super-admin user exists with a valid password.')]
+#[AsCommand(name: 'app:create-super-admin', description: 'Ensure the configured super-admin user exists with a valid password.')]
 final class CreateSuperAdminCommand extends Command
 {
-    private const EMAIL = 'super-admin@market-shop.local';
+    private const EMAIL = 'super-hanooti@gmail.com';
     private const DISPLAY_NAME = 'Super Admin';
 
     public function __construct(
@@ -31,7 +31,17 @@ final class CreateSuperAdminCommand extends Command
             ->getRepository(User::class)
             ->findOneBy(['identifier' => self::EMAIL]);
 
-        $password = 'ahmed@1991';
+        $password = $_ENV['SUPER_ADMIN_PASSWORD'] ?? $_SERVER['SUPER_ADMIN_PASSWORD'] ?? null;
+        if (!is_string($password) || '' === trim($password)) {
+            if (!$this->kernelDebug) {
+                $io->error('SUPER_ADMIN_PASSWORD must be configured outside the repository in production.');
+
+                return Command::FAILURE;
+            }
+
+            $password = bin2hex(random_bytes(16));
+            $io->note('A development password was generated for this run.');
+        }
 
         if ($user instanceof User && $user->isPasswordValid($password)) {
             $io->success(sprintf('Super-admin "%s" already exists with a valid password.', self::EMAIL));
@@ -53,7 +63,7 @@ final class CreateSuperAdminCommand extends Command
         $io->success(sprintf('Super-admin created: %s', self::EMAIL));
 
         if ($this->kernelDebug) {
-            $io->note(sprintf('Dev password: %s', $password));
+            $io->note(sprintf('Development password: %s', $password));
         }
 
         return Command::SUCCESS;

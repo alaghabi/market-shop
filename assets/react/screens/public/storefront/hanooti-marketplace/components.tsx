@@ -3,6 +3,7 @@ import { ArrowRight, CheckCircle2, Menu, ShieldCheck, Truck, X } from 'lucide-re
 import { boutiqueLink } from '../../boutiqueRouting';
 import { ImageWithFallback } from '../../../../components/ImageWithFallback';
 import type { StoreBoutique } from '../StorefrontTheme';
+import { SocialLinks } from '../../../../components/SocialLinks';
 
 export function TopBar({ boutique }: { boutique: StoreBoutique }) {
   return (
@@ -60,6 +61,11 @@ export function Footer({ boutique }: { boutique: StoreBoutique }) {
           <p className="mt-4 max-w-sm text-sm leading-7 text-white/60">
             {boutique.description || 'Boutique propulsee par Hanooti Marketplace.'}
           </p>
+          <SocialLinks
+            links={boutique.socialLinks}
+            className="mt-5 flex flex-wrap items-center gap-3"
+            itemClassName="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/75 transition hover:-translate-y-0.5 hover:bg-white/20 hover:text-white"
+          />
         </div>
         <FooterGroup title="Boutique" links={[["Catalogue", "/catalogue"], ["Promotions", "/promotions"], ["Avis", "/avis"]]} />
         <FooterGroup title="Aide" links={[["A propos", "/a-propos"], ["Contact", "/contact"], ["Panier", "/cart"]]} />

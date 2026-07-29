@@ -63,7 +63,9 @@ final readonly class DispatchNotificationMessageHandler
             }
 
             if (null === $message->orderId) {
-                if ('password_reset' === $message->eventCode) {
+                if ('email_verification' === $message->eventCode) {
+                    $this->sendEmailVerification($message, $boutique);
+                } elseif ('password_reset' === $message->eventCode) {
                     $this->sendPasswordResetEmail($message, $boutique);
                 } else {
                     $this->sendGenericEmail($message, $boutique, $template);
@@ -84,7 +86,7 @@ final readonly class DispatchNotificationMessageHandler
 
     private function sendGenericEmail(DispatchNotificationMessage $message, ?\App\Entity\Boutique $boutique, ?\App\Entity\NotificationTemplate $template): void
     {
-        $rendered = $template?->getContent() ?? $this->defaultMessage($message->eventCode);
+        $rendered = $template?->getContent() ?? $this->defaultMessage($message->eventCode, $message->variables);
         foreach ($message->variables as $key => $value) {
             $rendered = str_replace('{{'.$key.'}}', (string) $value, $rendered);
         }
@@ -95,19 +97,35 @@ final readonly class DispatchNotificationMessageHandler
         }
 
         $html = $this->twig->render('email/notification.html.twig', [
-            'boutique' => $boutique,
-            'logoUrl' => $this->absoluteUrl($boutique?->getLogoUrl()),
+            ...$this->brandContext($boutique),
             'message' => $rendered,
         ]);
 
-        $this->mailer->send(
-            (new TemplatedEmail())
+        $email = (new TemplatedEmail())
                 ->from($this->mailerFrom)
                 ->to($message->recipient)
                 ->subject((string) $subject)
                 ->html($html)
-                ->text(strip_tags($rendered)),
-        );
+                ->text(strip_tags($rendered));
+        $this->mailer->send($this->withBoutiqueReplyTo($email, $boutique));
+    }
+
+    private function sendEmailVerification(DispatchNotificationMessage $message, ?\App\Entity\Boutique $boutique): void
+    {
+        $verificationUrl = (string) ($message->variables['verificationUrl'] ?? '#');
+
+        $email = (new TemplatedEmail())
+                ->from($this->mailerFrom)
+                ->to($message->recipient)
+                ->subject('Vérifiez votre adresse email')
+                ->htmlTemplate('email/email_verification.html.twig')
+                ->context([
+                    ...$this->brandContext($boutique),
+                    'name' => $message->variables['name'] ?? 'Utilisateur',
+                    'verificationUrl' => $verificationUrl,
+                ])
+                ->text('Vérifiez votre adresse email : '.$verificationUrl);
+        $this->mailer->send($this->withBoutiqueReplyTo($email, $boutique));
     }
 
     private function sendOrderConfirmation(DispatchNotificationMessage $message): void
@@ -141,8 +159,7 @@ final readonly class DispatchNotificationMessageHandler
             ->subject('Confirmation de votre commande #'.substr((string) $order->getId(), 0, 8))
             ->htmlTemplate('email/order_confirmation.html.twig')
             ->context([
-                'boutiqueName' => $boutique->getName(),
-                'logoUrl' => $this->absoluteUrl($boutique->getLogoUrl()),
+                ...$this->brandContext($boutique),
                 'orderReference' => (string) $order->getId(),
                 'orderDate' => $order->getCreatedAt(),
                 'customerName' => $order->getCustomerName(),
@@ -151,24 +168,32 @@ final readonly class DispatchNotificationMessageHandler
                 'currency' => $order->getCurrency(),
             ]);
 
-        $this->mailer->send($email);
+        $this->mailer->send($this->withBoutiqueReplyTo($email, $boutique));
     }
 
     private function sendPasswordResetEmail(DispatchNotificationMessage $message, ?\App\Entity\Boutique $boutique): void
     {
-        $this->mailer->send(
-            (new TemplatedEmail())
+        $email = (new TemplatedEmail())
                 ->from($this->mailerFrom)
                 ->to($message->recipient)
                 ->subject('Réinitialisation de votre mot de passe')
                 ->htmlTemplate('email/password_reset.html.twig')
                 ->context([
-                    'boutique' => $boutique,
-                    'logoUrl' => $this->absoluteUrl($boutique?->getLogoUrl()),
+                    ...$this->brandContext($boutique),
                     'name' => $message->variables['name'] ?? 'Utilisateur',
                     'resetUrl' => $message->variables['resetUrl'] ?? '#',
-                ]),
-        );
+                ]);
+        $this->mailer->send($this->withBoutiqueReplyTo($email, $boutique));
+    }
+
+    private function withBoutiqueReplyTo(TemplatedEmail $email, ?\App\Entity\Boutique $boutique): TemplatedEmail
+    {
+        $contactEmail = $boutique?->getContactEmail();
+        if (null !== $contactEmail && false !== filter_var($contactEmail, FILTER_VALIDATE_EMAIL)) {
+            $email->replyTo($contactEmail);
+        }
+
+        return $email;
     }
 
     private function absoluteUrl(?string $url): ?string
@@ -192,17 +217,24 @@ final readonly class DispatchNotificationMessageHandler
             'boutique.archived' => 'Votre boutique est archivée',
             'boutique_admin.activated' => 'Votre accès administrateur boutique est activé',
             'boutique_admin.suspended' => 'Votre accès administrateur boutique est suspendu',
+            'employee.activated' => 'Votre accès employé boutique est activé',
+            'employee.suspended' => 'Votre accès employé boutique est suspendu',
             'subscription.approved' => 'Votre abonnement boutique est accepté',
             'subscription.rejected' => 'Votre demande d’abonnement est refusée',
             'boutique.published' => 'Votre boutique est publiée',
             'boutique.unpublished' => 'Votre boutique est dépubliée',
+            'boutique.publication_requested' => 'Demande de publication reçue',
+            'boutique.publication_approved' => 'Votre boutique est publiée',
+            'boutique.publication_rejected' => 'Votre demande de publication est refusée',
+            'subscription.expired' => 'Votre abonnement a expiré',
             default => 'Notification Hanooti',
         };
     }
 
-    private function defaultMessage(string $eventCode): string
+    /** @param array<string, string|int|float|bool|null> $variables */
+    private function defaultMessage(string $eventCode, array $variables = []): string
     {
-        return match ($eventCode) {
+        $message = match ($eventCode) {
             'boutique.approved' => 'Votre boutique a été approuvée par Hanooti.',
             'boutique.rejected' => 'Votre boutique a été refusée par Hanooti.',
             'boutique.suspended' => 'Votre boutique a été suspendue par Hanooti.',
@@ -210,11 +242,59 @@ final readonly class DispatchNotificationMessageHandler
             'boutique.archived' => 'Votre boutique a été archivée par Hanooti.',
             'boutique_admin.activated' => 'Votre accès administrateur à la boutique a été activé.',
             'boutique_admin.suspended' => 'Votre accès administrateur à la boutique a été suspendu.',
+            'employee.activated' => 'Votre accès employé à la boutique a été activé.',
+            'employee.suspended' => 'Votre accès employé à la boutique a été suspendu.',
             'subscription.approved' => 'Votre demande d’abonnement a été acceptée.',
             'subscription.rejected' => 'Votre demande d’abonnement a été refusée.',
             'boutique.published' => 'Votre boutique est maintenant visible publiquement.',
             'boutique.unpublished' => 'Votre boutique n’est plus visible publiquement.',
+            'boutique.publication_requested' => 'La demande de publication de votre boutique a été reçue et sera traitée sous 24h.',
+            'boutique.publication_approved' => 'Votre boutique est maintenant visible publiquement.',
+            'boutique.publication_rejected' => 'Votre demande de publication a été refusée.',
+            'subscription.expired' => 'Votre abonnement boutique a expiré. Renouvelez-le pour réactiver vos fonctionnalités.',
             default => 'Une nouvelle notification est disponible dans votre back-office.',
         };
+
+        $reason = $variables['reason'] ?? null;
+        if (is_string($reason) && '' !== trim($reason)) {
+            $message .= ' Raison : '.$reason;
+        }
+
+        return $message;
+    }
+
+    /** @return array<string, mixed> */
+    private function brandContext(?\App\Entity\Boutique $boutique): array
+    {
+        $settings = $boutique?->getSettings();
+
+        return [
+            'boutiqueName' => $boutique?->getName() ?? 'Hanooti',
+            'logoUrl' => $this->absoluteUrl($boutique?->getLogoUrl()),
+            'slogan' => $settings?->getSlogan(),
+            'primaryColor' => $this->safeColor($boutique?->getPrimaryColor() ?? '#3525cd', '#3525cd'),
+            'secondaryColor' => $this->safeColor($boutique?->getSecondaryColor() ?? '#505f76', '#505f76'),
+            'fontFamily' => $this->safeFont($settings?->getFontFamily()),
+            'fontSize' => $this->safeSize($settings?->getFontSize(), '15px'),
+            'borderRadius' => $this->safeSize($settings?->getBorderRadius(), '12px'),
+            'footerText' => $settings?->getFooterConfig()['footer_text'] ?? 'Email envoyé par Hanooti',
+        ];
+    }
+
+    private function safeColor(string $value, string $fallback): string
+    {
+        return preg_match('/^#[0-9a-fA-F]{3,8}$/', $value) ? $value : $fallback;
+    }
+
+    private function safeFont(?string $value): string
+    {
+        $allowed = ['Arial', 'Helvetica', 'Inter', 'Roboto', 'Open Sans', 'sans-serif'];
+
+        return is_string($value) && in_array($value, $allowed, true) ? $value : 'Arial, sans-serif';
+    }
+
+    private function safeSize(?string $value, string $fallback): string
+    {
+        return is_string($value) && preg_match('/^\d{1,3}(px|rem|em|%)$/', $value) ? $value : $fallback;
     }
 }

@@ -133,7 +133,7 @@ final readonly class AdminValidationController
     }
 
     #[Route('/api/admin/users/{id}/suspend', name: 'api_admin_suspend_user', methods: ['POST'])]
-    public function suspendUser(string $id): JsonResponse
+    public function suspendUser(string $id, Request $request): JsonResponse
     {
         if (!$this->security->isGranted('ROLE_SUPER_ADMIN') && !$this->security->isGranted('ROLE_BOUTIQUE_ADMIN')) {
             return new JsonResponse(['message' => 'Accès refusé.'], JsonResponse::HTTP_FORBIDDEN);
@@ -151,6 +151,9 @@ final readonly class AdminValidationController
         if (!$this->security->isGranted('ROLE_SUPER_ADMIN') && array_filter($managedShops, static fn ($shop): bool => 'ROLE_CAISSIER' !== $shop->getRole())) {
             return new JsonResponse(['message' => 'Seul un super administrateur peut gérer un administrateur boutique.'], JsonResponse::HTTP_FORBIDDEN);
         }
+
+        $payload = json_decode($request->getContent(), true);
+        $reason = is_array($payload) ? trim((string) ($payload['reason'] ?? '')) : '';
 
         if ($this->security->isGranted('ROLE_SUPER_ADMIN')) {
             $user->setStatus(UserStatus::Suspended);
@@ -171,6 +174,7 @@ final readonly class AdminValidationController
                 'Accès administrateur suspendu',
                 sprintf('Votre accès administrateur à la boutique "%s" a été suspendu.', $userShop->getBoutique()->getName()),
                 'boutique_admin.suspended',
+                $reason ? ['reason' => $reason] : [],
             );
         }
 
@@ -178,7 +182,7 @@ final readonly class AdminValidationController
     }
 
     #[Route('/api/admin/users/{id}/activate', name: 'api_admin_activate_user', methods: ['POST'])]
-    public function activateUser(string $id): JsonResponse
+    public function activateUser(string $id, Request $request): JsonResponse
     {
         if (!$this->security->isGranted('ROLE_SUPER_ADMIN') && !$this->security->isGranted('ROLE_BOUTIQUE_ADMIN')) {
             return new JsonResponse(['message' => 'Accès refusé.'], JsonResponse::HTTP_FORBIDDEN);
@@ -196,6 +200,9 @@ final readonly class AdminValidationController
         if (!$this->security->isGranted('ROLE_SUPER_ADMIN') && array_filter($managedShops, static fn ($shop): bool => 'ROLE_CAISSIER' !== $shop->getRole())) {
             return new JsonResponse(['message' => 'Seul un super administrateur peut gérer un administrateur boutique.'], JsonResponse::HTTP_FORBIDDEN);
         }
+
+        $payload = json_decode($request->getContent(), true);
+        $reason = is_array($payload) ? trim((string) ($payload['reason'] ?? '')) : '';
 
         if ($this->security->isGranted('ROLE_SUPER_ADMIN')) {
             $user->setStatus(UserStatus::Active);
@@ -216,6 +223,7 @@ final readonly class AdminValidationController
                 'Accès administrateur activé',
                 sprintf('Votre accès administrateur à la boutique "%s" a été activé.', $userShop->getBoutique()->getName()),
                 'boutique_admin.activated',
+                $reason ? ['reason' => $reason] : [],
             );
         }
 

@@ -16,6 +16,7 @@ final class ProductFeedController
     public function __construct(
         private ProductRepository $products,
         private SubdomainResolver $subdomainResolver,
+        private string $rootDomain,
     ) {
     }
 
@@ -30,7 +31,7 @@ final class ProductFeedController
             return new Response('<?xml version="1.0"?><error>Boutique non trouvée</error>', 404, ['Content-Type' => 'text/xml; charset=utf-8']);
         }
 
-        $shopUrl = $boutique->getSubdomainUrl();
+        $shopUrl = $boutique->getSubdomainUrl($this->rootDomain);
         $productList = $this->products->findSeoIndexedByBoutique($boutique);
         $currency = $boutique->getSettings()?->getLanguageConfig()['default_currency'] ?? 'TND';
 

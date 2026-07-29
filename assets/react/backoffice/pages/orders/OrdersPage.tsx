@@ -36,6 +36,7 @@ export function OrdersPage({ getAccessToken, userRoles = [] }: { getAccessToken:
   const [orderToReject, setOrderToReject] = useState<Order | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [actionOrderId, setActionOrderId] = useState<string | null>(null);
+  const [deliveryPollOrderId, setDeliveryPollOrderId] = useState<string | null>(null);
   const isAdmin = userRoles.includes('ROLE_BOUTIQUE_ADMIN') || userRoles.includes('ROLE_SUPER_ADMIN');
 
   const fetchData = useCallback(async () => {
@@ -67,10 +68,38 @@ export function OrdersPage({ getAccessToken, userRoles = [] }: { getAccessToken:
       setOrderToReject(null);
       setDetailOrder(null);
       await refresh();
+      if ('paid' === nextStatus && (order.paymentMethodCode === 'CASH_ON_DELIVERY' || order.paymentStatus === 'paid')) {
+        void waitForDelivery(order.id);
+      }
     } catch (exception) {
       showNotice(exception instanceof Error ? exception.message : 'Impossible de mettre à jour la commande.', 'error');
     } finally {
       setActionOrderId(null);
+    }
+  }
+
+  async function waitForDelivery(orderId: string) {
+    setDeliveryPollOrderId(orderId);
+    try {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        const updated = await api.get<Order>(`/orders/${orderId}`);
+        if (updated.shipmentId || updated.deliveryError || ['shipped', 'delivered', 'cancelled'].includes(updated.status)) {
+          setDetailOrder((current) => current?.id === orderId ? updated : current);
+          await refresh();
+          if (updated.deliveryLabelUrl) {
+            showNotice('Le bon du transporteur est disponible.', 'success');
+          } else if (updated.deliveryError) {
+            showNotice(updated.deliveryError, 'error');
+          }
+          return;
+        }
+      }
+      showNotice('La livraison est toujours en cours de traitement.', 'info');
+    } catch (exception) {
+      showNotice(exception instanceof Error ? exception.message : 'Impossible de suivre la livraison.', 'error');
+    } finally {
+      setDeliveryPollOrderId(null);
     }
   }
 
@@ -154,12 +183,23 @@ export function OrdersPage({ getAccessToken, userRoles = [] }: { getAccessToken:
                     {isAdmin && order.status === 'pending' && (
                       <>
                         <Button size="sm" onClick={(event) => { event.stopPropagation(); void updateOrderStatus(order, 'paid'); }} disabled={actionOrderId === order.id}>
-                          Confirmer
+                          {deliveryPollOrderId === order.id ? 'Livraison...' : 'Confirmer'}
                         </Button>
                         <Button size="sm" variant="danger" onClick={(event) => { event.stopPropagation(); setOrderToReject(order); }} disabled={actionOrderId === order.id}>
                           Refuser
                         </Button>
                       </>
+                    )}
+                    {order.deliveryLabelUrl && (
+                      <a
+                        href={order.deliveryLabelUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="bo-btn bo-btn-ghost bo-btn-sm"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        Bon transporteur
+                      </a>
                     )}
                     {isAdmin && order.status === 'cancelled' && (
                       <Button size="sm" variant="danger" onClick={(event) => { event.stopPropagation(); setOrderToDelete(order); }} disabled={actionOrderId === order.id}>
@@ -208,7 +248,18 @@ export function OrdersPage({ getAccessToken, userRoles = [] }: { getAccessToken:
               <FormField label="Adresse de livraison">
                 <div>{[detailOrder.shippingAddress, detailOrder.shippingLocality, detailOrder.shippingCity, detailOrder.shippingGovernorate, detailOrder.shippingPostalCode, detailOrder.shippingCountry].filter(Boolean).join(', ') || '—'}</div>
               </FormField>
-              <FormField label="Suivi livraison"><div>{detailOrder.deliveryTracking ?? detailOrder.deliveryStatus ?? '—'}</div></FormField>
+              <FormField label="Suivi livraison">
+                <div>
+                  {detailOrder.deliveryCompanyName ? `${detailOrder.deliveryCompanyName} — ` : ''}
+                  {detailOrder.deliveryTracking ?? detailOrder.deliveryStatus ?? '—'}
+                </div>
+                {detailOrder.deliveryError && <div style={{ color: 'var(--bo-error)', marginTop: 6 }}>{detailOrder.deliveryError}</div>}
+                {detailOrder.deliveryLabelUrl && (
+                  <a href={detailOrder.deliveryLabelUrl} target="_blank" rel="noreferrer" className="bo-btn bo-btn-ghost bo-btn-sm" style={{ display: 'inline-flex', marginTop: 8 }}>
+                    Télécharger / imprimer le bon
+                  </a>
+                )}
+              </FormField>
             </div>
             <div style={{ borderTop: '1px solid var(--bo-border)', paddingTop: 16 }}>
               <strong>Détails des produits</strong>
@@ -233,7 +284,7 @@ export function OrdersPage({ getAccessToken, userRoles = [] }: { getAccessToken:
             {isAdmin && detailOrder.status === 'pending' && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                 <Button onClick={() => void updateOrderStatus(detailOrder, 'paid')} disabled={actionOrderId === detailOrder.id}>
-                  Confirmer la commande
+                  {deliveryPollOrderId === detailOrder.id ? 'Livraison en cours...' : 'Confirmer et lancer la livraison'}
                 </Button>
                 <Button variant="danger" onClick={() => setOrderToReject(detailOrder)} disabled={actionOrderId === detailOrder.id}>
                   Refuser la commande

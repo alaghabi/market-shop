@@ -17,6 +17,7 @@ use App\Repository\BoutiqueRepository;
 use App\Repository\UserRepository;
 use App\Security\LocalTokenManager;
 use App\Service\NotificationService;
+use App\Service\Auth\EmailVerificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
@@ -30,6 +31,7 @@ final readonly class RegisterShopController
         private BoutiqueRepository $boutiques,
         private LocalTokenManager $tokens,
         private NotificationService $notifications,
+        private EmailVerificationService $emailVerification,
     ) {
     }
 
@@ -110,8 +112,11 @@ final readonly class RegisterShopController
 
         $this->entityManager->flush();
 
+        $this->emailVerification->issue($user, $boutique);
+
         return new JsonResponse([
-            'message' => 'Boutique enregistrée avec succès. En attente de validation.',
+            'message' => 'Boutique enregistrée. Vérifiez votre email pour activer votre accès. La publication sera demandée depuis le back-office.',
+            'verificationRequired' => true,
             'boutique' => [
                 'id' => (string) $boutique->getId(),
                 'name' => $boutique->getName(),

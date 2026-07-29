@@ -73,7 +73,7 @@ final class BoutiqueRequestSubscriber implements EventSubscriberInterface
 
         // PENDING boutiques: only accessible by admins
         if (BoutiqueStatus::Pending === $status && !$isStaff) {
-            throw new AccessDeniedHttpException('Cette boutique est en attente d\'approbation.');
+            throw new AccessDeniedHttpException('Cette boutique n\'est pas encore publiée.');
         }
 
         // SUSPENDED boutiques: still accessible by admins for management

@@ -28,7 +28,11 @@ const LINKS = [
     slug: 'themes', title: 'Thèmes', desc: 'Gestion des thèmes disponibles sur la plateforme',
     icon: 'M4.098 19.902a3.75 3.75 0 005.304 0l6.401-6.402M6.75 21A3.75 3.75 0 013 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 003.75-3.75V8.197M6.75 21h13.125A3.75 3.75 0 0021 17.25v-9.5A3.75 3.75 0 0017.25 4H9.75', color: '#ec4899',
   },
-];
+  {
+    slug: 'platform-settings', title: 'Réseaux plateforme', desc: 'Configurer les réseaux sociaux officiels visibles sur le frontoffice général',
+    icon: 'M12 2a10 10 0 100 20 10 10 0 000-20zm6.93 6h-3.08a15.7 15.7 0 00-1.19-3.07A8.03 8.03 0 0118.93 8zM12 4c.83 1.2 1.46 2.54 1.84 4h-3.68C10.54 6.54 11.17 5.2 12 4zM4.26 14a8.02 8.02 0 010-4h3.33a16.4 16.4 0 000 4H4.26zm.81 2h3.08c.27 1.1.67 2.13 1.19 3.07A8.03 8.03 0 015.07 16zM5.07 8a8.03 8.03 0 014.27-3.07A15.7 15.7 0 008.15 8H5.07zM12 20c-.83-1.2-1.46-2.54-1.84-4h3.68c-.38 1.46-1.01 2.8-1.84 4zm2.26-6H9.74a14.7 14.7 0 010-4h4.52a14.7 14.7 0 010 4zm.4 5.07A15.7 15.7 0 0015.85 16h3.08a8.03 8.03 0 01-4.27 3.07zM16.41 14a16.4 16.4 0 000-4h3.33a8.02 8.02 0 010 4h-3.33z', color: '#0ea5e9',
+  },
+ ];
 
 export function SuperAdminPage({ getAccessToken: _t }: { getAccessToken: () => string | null }) {
   const links = useMemo(() => LINKS, []);

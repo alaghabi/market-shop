@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Enum\ChatbotMode;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -15,6 +16,9 @@ class ChatbotConfig extends AbstractEntity
 
     #[ORM\Column(length: 64, options: ['default' => 'llama3.2:1b'])]
     private string $model = 'llama3.2:1b';
+
+    #[ORM\Column(length: 16, enumType: ChatbotMode::class, options: ['default' => 'MANUAL'])]
+    private ChatbotMode $mode = ChatbotMode::Manual;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $systemPrompt = null;
@@ -42,6 +46,16 @@ class ChatbotConfig extends AbstractEntity
     public function getModel(): string
     {
         return $this->model;
+    }
+
+    public function getMode(): ChatbotMode
+    {
+        return $this->mode;
+    }
+
+    public function setMode(ChatbotMode $mode): void
+    {
+        $this->mode = $mode;
     }
 
     public function setModel(string $model): void

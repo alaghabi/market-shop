@@ -1,5 +1,6 @@
 /.env.local
 /.env.*.local
+/secrets/
 /vendor/
 /node_modules/
 /var/cache/

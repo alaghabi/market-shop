@@ -273,9 +273,9 @@ php bin/console app:subscription-expiry   # Expiration automatique
 
 ### Livraison
 ```bash
-php bin/console app:delivery-process        # Traitement des commandes
 php bin/console app:delivery-retry          # Réessai des échecs
 php bin/console app:delivery-verify-accounts # Vérification des comptes
+php bin/console app:delivery-tracking-sync   # Synchronisation des suivis
 ```
 
 ### Maintenance
@@ -305,10 +305,12 @@ php bin/console app:cleanup-old-data        # Nettoyage anciennes données
 | Redis   | 6379    | Cache                |
 | Mercure | (interne) | Notifications temps réel |
 
-### Tâches cron (chaque minute)
-1. `app:subscription-expiry` — expire les abonnements terminés
-2. `app:delivery-process` — soumet les nouvelles commandes aux transporteurs
-3. `app:delivery-retry` — retente les soumissions échouées (max 5)
+### Traitement asynchrone
+1. La confirmation d'une commande dispatch `CreateShipmentMessage` dans `async_logistics`.
+2. Le worker Messenger soumet la commande au transporteur sans bloquer l'interface.
+3. Mercure publie le résultat et le header recharge les notifications.
+4. `app:delivery-retry` retente les soumissions échouées (maximum 5).
+5. `app:delivery-tracking-sync` synchronise les expéditions non finalisées.
 
 ---
 

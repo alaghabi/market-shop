@@ -1,0 +1,33 @@
+{
+    auto_https off
+}
+
+{$SERVER_NAME:hanooti.shop} {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    handle /.well-known/mercure* {
+        reverse_proxy mercure:80
+    }
+
+    @keycloak host auth.hanooti.shop
+    handle @keycloak {
+        reverse_proxy keycloak:8080
+    }
+
+    handle {
+        root * /app/public
+        encode zstd br gzip
+        php_server
+    }
+
+    tls {$TLS_CERT_FILE} {$TLS_KEY_FILE}
+}
+
+http://hanooti.shop, http://*.hanooti.shop {
+    redir https://{host}{uri} permanent
+}

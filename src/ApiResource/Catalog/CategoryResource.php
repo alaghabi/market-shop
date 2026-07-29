@@ -18,10 +18,10 @@ use App\State\Catalog\CategoryProvider;
     shortName: 'Category',
     operations: [
         new GetCollection(uriTemplate: '/categories', output: CategoryOutput::class, provider: CategoryProvider::class),
-        new Post(uriTemplate: '/categories', security: "is_granted('ROLE_BOUTIQUE_ADMIN')", read: false, input: CategoryInput::class, output: CategoryOutput::class, processor: CategoryProcessor::class),
+        new Post(uriTemplate: '/categories', security: "is_granted('ROLE_BOUTIQUE_ADMIN') and is_granted('PERMISSION', 'product.category.manage')", read: false, input: CategoryInput::class, output: CategoryOutput::class, processor: CategoryProcessor::class),
         new Get(uriTemplate: '/categories/{id}', output: CategoryOutput::class, provider: CategoryProvider::class),
-        new Patch(uriTemplate: '/categories/{id}', uriVariables: ['id' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id')], security: "is_granted('ROLE_BOUTIQUE_ADMIN')", read: false, input: CategoryInput::class, output: CategoryOutput::class, processor: CategoryProcessor::class),
-        new Delete(uriTemplate: '/categories/{id}', uriVariables: ['id' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id')], security: "is_granted('ROLE_BOUTIQUE_ADMIN')", read: false, processor: CategoryProcessor::class),
+        new Patch(uriTemplate: '/categories/{id}', uriVariables: ['id' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id')], security: "is_granted('ROLE_BOUTIQUE_ADMIN') and is_granted('PERMISSION', 'product.category.manage')", read: false, input: CategoryInput::class, output: CategoryOutput::class, processor: CategoryProcessor::class),
+        new Delete(uriTemplate: '/categories/{id}', uriVariables: ['id' => new Link(schema: ['type' => 'string', 'format' => 'uuid'], property: 'id')], security: "is_granted('ROLE_BOUTIQUE_ADMIN') and is_granted('PERMISSION', 'product.category.manage')", read: false, processor: CategoryProcessor::class),
     ],
 )]
 final class CategoryResource

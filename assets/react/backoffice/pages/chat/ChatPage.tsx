@@ -8,6 +8,7 @@ import { PageHeader } from "../../layout/Shell";
 import { useNotification } from "../../hooks/useNotification";
 import { Pagination } from "../../components/Pagination";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useBoutique } from "../../hooks/useBoutique";
 
 type Conversation = {
   id: string;
@@ -32,13 +33,26 @@ type ChatMessage = {
   createdAt: string;
 };
 
+type ChatbotConfig = {
+  mode: "MANUAL" | "AI";
+  isEnabled: boolean;
+  aiAllowed: boolean;
+  chatbotEnabled: boolean;
+};
+
 export function ChatPage({
   getAccessToken,
+  userRoles = [],
 }: {
   getAccessToken: () => string | null;
+  userRoles?: string[];
 }) {
   const api = useApiClient(getAccessToken);
   const { showNotice } = useNotification();
+  const { boutique } = useBoutique();
+  const [chatbotConfig, setChatbotConfig] = useState<ChatbotConfig | null>(null);
+  const [chatbotLoading, setChatbotLoading] = useState(false);
+  const canManageChatbot = userRoles.includes("ROLE_SUPER_ADMIN") || userRoles.includes("ROLE_BOUTIQUE_ADMIN");
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [messageLoading, setMessageLoading] = useState(false);
@@ -89,6 +103,38 @@ export function ChatPage({
     if (!selected) return;
     loadMessages(selected);
   }, [selected?.id]);
+
+  useEffect(() => {
+    if (!canManageChatbot || !boutique?.id) {
+      setChatbotConfig(null);
+      return;
+    }
+
+    setChatbotLoading(true);
+    api
+      .get<ChatbotConfig>('/chatbot')
+      .then(setChatbotConfig)
+      .catch(() => setChatbotConfig(null))
+      .finally(() => setChatbotLoading(false));
+  }, [api, boutique?.id, canManageChatbot]);
+
+  async function updateChatbot(mode: "MANUAL" | "AI", isEnabled: boolean): Promise<void> {
+    if (!boutique?.id) return;
+
+    setChatbotLoading(true);
+    try {
+      const updated = await api.patch<ChatbotConfig>('/chatbot', {
+        mode,
+        isEnabled,
+      });
+      setChatbotConfig(updated);
+      showNotice(isEnabled ? "Chatbot activé." : "Chatbot désactivé.", "success");
+    } catch (err) {
+      showNotice(err instanceof Error ? err.message : "Impossible de modifier le chatbot.", "error");
+    } finally {
+      setChatbotLoading(false);
+    }
+  }
 
   async function sendReply(event: React.FormEvent) {
     event.preventDefault();
@@ -141,6 +187,61 @@ export function ChatPage({
           </Button>
         }
       />
+      {canManageChatbot && (
+        <Card style={{ marginBottom: 16 }}>
+          <CardHeader>
+            <strong>Activation du chatbot</strong>
+          </CardHeader>
+          <CardBody>
+            {!boutique ? (
+              <p style={{ margin: 0 }}>Sélectionnez une boutique pour gérer son chatbot.</p>
+            ) : chatbotLoading && !chatbotConfig ? (
+              <LoadingState message="Chargement de la configuration chatbot..." />
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+                <span>
+                  Boutique : <strong>{boutique.name}</strong>
+                </span>
+                <Badge tone={chatbotConfig?.chatbotEnabled ? "success" : "neutral"}>
+                  {chatbotConfig?.chatbotEnabled ? `Actif (${chatbotConfig.mode})` : "Désactivé"}
+                </Badge>
+                <Button
+                  type="button"
+                  variant={chatbotConfig?.mode === "MANUAL" && chatbotConfig.isEnabled ? "primary" : "secondary"}
+                  size="sm"
+                  disabled={chatbotLoading}
+                  onClick={() => { void updateChatbot("MANUAL", true); }}
+                >
+                  Manuel
+                </Button>
+                <Button
+                  type="button"
+                  variant={chatbotConfig?.mode === "AI" && chatbotConfig.isEnabled ? "primary" : "secondary"}
+                  size="sm"
+                  disabled={chatbotLoading || chatbotConfig?.aiAllowed !== true}
+                  onClick={() => { void updateChatbot("AI", true); }}
+                >
+                  IA
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={chatbotLoading || chatbotConfig?.isEnabled !== true}
+                  onClick={() => { void updateChatbot(chatbotConfig?.mode ?? "MANUAL", false); }}
+                >
+                  Désactiver
+                </Button>
+                {chatbotConfig?.aiAllowed !== true && (
+                  <small style={{ color: "var(--bo-text-muted)" }}>
+                    Le mode IA nécessite le module chatbot dans l’abonnement ou une extension active.
+                  </small>
+                )}
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
       <div
         style={{
           display: "grid",

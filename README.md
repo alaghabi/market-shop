@@ -273,41 +273,11 @@ make test
 
 The application is exposed at `http://localhost:8080`.
 
-## OAuth2 / OIDC Login
+## Local Login
 
-The project is prepared for OAuth2 Authorization Code + PKCE login, suitable for a React SPA
-calling a Symfony/API Platform resource server.
-
-Backend bearer tokens are expected to be JWT access tokens signed with `RS256` and published via
-the provider JWKS endpoint.
-
-Required backend variables:
-
-```dotenv
-OAUTH2_ISSUER="https://issuer.example.com"
-OAUTH2_AUDIENCE="market-shop-api"
-OAUTH2_JWKS_URI="https://issuer.example.com/.well-known/jwks.json"
-```
-
-Required frontend build variables:
-
-```dotenv
-OAUTH2_AUTHORITY="https://issuer.example.com"
-OAUTH2_CLIENT_ID="market-shop-spa"
-OAUTH2_REDIRECT_URI="http://localhost:8080/oauth/callback"
-OAUTH2_POST_LOGOUT_REDIRECT_URI="http://localhost:8080"
-OAUTH2_SCOPE="openid profile email offline_access"
-```
-
-Configure the OAuth2/OIDC provider with:
-
-- grant type: Authorization Code
-- PKCE: required
-- redirect URI: `http://localhost:8080/oauth/callback`
-- logout redirect URI: `http://localhost:8080`
-- audience/API identifier: `market-shop-api`
-
-The React app uses `oidc-client-ts` and renders through `createRoot` from `react-dom/client`.
+The application uses local email/password authentication through `/api/auth/login` and
+issues HMAC-signed JWT access tokens with `APP_SECRET`. No external OAuth provider is
+required. Password verification emails use the SMTP provider configured by `MAILER_DSN`.
 
 ## First Feature Pattern
 

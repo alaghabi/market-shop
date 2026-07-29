@@ -55,6 +55,7 @@ final class BackofficeFixtures extends Fixture implements DependentFixtureInterf
         ['promotions', 'Promotions avancees', 'marketing', 'percent', false],
         ['blog', 'Blog', 'contenu', 'newspaper', false],
         ['brands', 'Marques', 'catalogue', 'copyright', false],
+        ['customer_auth', 'Comptes clients', 'auth', 'user-round', false],
         ['multi_address', 'Adresses multiples', 'commandes', 'map-pin', false],
         ['chatbot', 'Chatbot intelligent', 'support', 'robot', false],
         ['seo_advanced', 'SEO avance', 'marketing', 'search', false],

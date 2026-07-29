@@ -200,10 +200,10 @@ final readonly class SettingsProcessor implements ProcessorInterface
         if (null !== $d->orderMode) {
             $s->setOrderMode(\App\Enum\OrderMode::tryFrom($d->orderMode) ?? $s->getOrderMode());
         }
-        if (null !== $d->enableEmailVerification) {
-            $s->setEnableEmailVerification($d->enableEmailVerification);
-        }
-        if (null !== $d->enableCustomerEmailVerification) {
+        // Internal accounts always require email verification. Only the Super Admin
+        // may opt customer accounts into the same requirement for this boutique.
+        $s->setEnableEmailVerification(true);
+        if ($this->context->isSuperAdmin() && null !== $d->enableCustomerEmailVerification) {
             $s->setEnableCustomerEmailVerification($d->enableCustomerEmailVerification);
         }
         if (null !== $d->createAccountAfterOrder) {
@@ -276,7 +276,18 @@ final readonly class SettingsProcessor implements ProcessorInterface
     /** @param array<string, string> $current */
     private function mergeSocialLinks(array $current, BoutiqueSettingsInput $data): array
     {
-        $socialLinks = [] !== $data->socialLinks ? $data->socialLinks : $current;
+        $socialLinks = [];
+        $configuredLinks = [] !== $data->socialLinks ? $data->socialLinks : $current;
+        foreach ($configuredLinks as $key => $value) {
+            if (!is_string($value)) {
+                continue;
+            }
+
+            $normalized = $this->normalizeSocialLink((string) $key, $value);
+            if (null !== $normalized) {
+                $socialLinks[(string) $key] = $normalized;
+            }
+        }
 
         $aliases = [
             'facebook' => $data->facebookUrl,
@@ -289,12 +300,38 @@ final readonly class SettingsProcessor implements ProcessorInterface
         ];
 
         foreach ($aliases as $key => $value) {
-            if (null !== $value) {
-                $socialLinks[$key] = $value;
+            if (null === $value) {
+                continue;
             }
+
+            $normalized = $this->normalizeSocialLink($key, $value);
+            if (null === $normalized) {
+                unset($socialLinks[$key]);
+                continue;
+            }
+
+            $socialLinks[$key] = $normalized;
         }
 
         return $socialLinks;
+    }
+
+    private function normalizeSocialLink(string $key, string $value): ?string
+    {
+        $value = trim($value);
+        if ('' === $value) {
+            return null;
+        }
+
+        if ('whatsapp' !== $key && !str_starts_with(strtolower($value), 'https://')) {
+            throw new BadRequestHttpException(sprintf('Le lien %s doit utiliser https://.', $key));
+        }
+
+        if ('whatsapp' === $key && !str_starts_with(strtolower($value), 'https://') && !preg_match('/^\+?[0-9 ()-]{7,}$/', $value)) {
+            throw new BadRequestHttpException('Le numéro WhatsApp est invalide.');
+        }
+
+        return $value;
     }
 
     /** @param array<string, string> $current */

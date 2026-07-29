@@ -9,7 +9,7 @@ use Symfony\Component\HttpFoundation\Request;
 final class SubdomainResolver
 {
     /** @var list<string> */
-    private const EXCLUDED_SUBDOMAINS = ['www', 'api', 'admin', 'mail', 'staging', 'dev'];
+    private const EXCLUDED_SUBDOMAINS = ['www', 'api', 'admin', 'mail', 'auth', 'staging', 'dev'];
 
     public function __construct(
         private BoutiqueRepository $boutiques,
@@ -35,12 +35,18 @@ final class SubdomainResolver
 
         // Strip root domain to isolate subdomain
         $rootDomain = strtolower(trim($this->rootDomain, '.'));
+        if ('' === $rootDomain) {
+            return null;
+        }
+
         if ('' !== $rootDomain && $host === $rootDomain) {
             return null;
         }
 
-        if ('' !== $rootDomain && str_ends_with($host, '.'.$rootDomain)) {
+        if (str_ends_with($host, '.'.$rootDomain)) {
             $host = substr($host, 0, -strlen('.'.$rootDomain));
+        } elseif ($host !== $rootDomain) {
+            return null;
         }
 
         // Extract the first segment as subdomain

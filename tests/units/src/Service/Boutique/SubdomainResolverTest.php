@@ -17,6 +17,8 @@ final class SubdomainResolverTest extends TestCase
 
         self::assertSame('my-shop', $resolver->extractSubdomain('MY-SHOP.hanooti.com.'));
         self::assertNull($resolver->extractSubdomain('www.hanooti.com'));
+        self::assertNull($resolver->extractSubdomain('auth.hanooti.com'));
         self::assertNull($resolver->extractSubdomain('hanooti.com'));
+        self::assertNull($resolver->extractSubdomain('my-shop.example.com'));
     }
 }

@@ -9,6 +9,7 @@ use App\Repository\ChatbotConfigRepository;
 use App\Repository\ConversationRepository;
 use App\Repository\MessageRepository;
 use App\Service\Chat\ChatbotService;
+use App\Service\Chat\ChatbotCapabilityService;
 use App\Service\Chat\MercurePublisher;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
@@ -17,6 +18,7 @@ final class ChatbotQueryMessageHandler
 {
     public function __construct(
         private ChatbotService $chatbotService,
+        private ChatbotCapabilityService $chatbotCapability,
         private ChatbotConfigRepository $configRepository,
         private ConversationRepository $conversationRepository,
         private MessageRepository $messageRepository,
@@ -32,8 +34,8 @@ final class ChatbotQueryMessageHandler
             return;
         }
 
-        $config = $this->configRepository->findEnabledByBoutique($boutique);
-        if (null === $config) {
+        $config = $this->configRepository->findOneByBoutique($boutique);
+        if (!$this->chatbotCapability->canDispatchAi($boutique, $config)) {
             return;
         }
 

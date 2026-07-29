@@ -12,6 +12,8 @@ import type { SubscriptionSummary } from '../../types';
 type BoutiqueSettings = {
   contactEmail?: string; contactPhone?: string;
   address?: string; city?: string; postalCode?: string; country?: string;
+  facebookUrl?: string; instagramUrl?: string; tiktokUrl?: string; youtubeUrl?: string;
+  linkedinUrl?: string; xTwitterUrl?: string; whatsappNumber?: string;
   enableEmailVerification?: boolean; enableCustomerEmailVerification?: boolean;
   orderMode?: string; maintenance?: boolean;
   metaPixelId?: string;
@@ -31,6 +33,14 @@ type BoutiqueSettingsResponse = {
   maintenanceMode?: boolean | null;
   maintenance?: boolean | null;
   metaPixelId?: string | null;
+  facebookUrl?: string | null;
+  instagramUrl?: string | null;
+  tiktokUrl?: string | null;
+  youtubeUrl?: string | null;
+  linkedinUrl?: string | null;
+  xTwitterUrl?: string | null;
+  whatsappNumber?: string | null;
+  socialLinks?: Record<string, string>;
   moduleConfig?: { enable_customer_auth?: boolean };
 };
 
@@ -39,10 +49,11 @@ function hasAccessibleModule(value: string[] | Record<string, string> | undefine
   return Object.values(value ?? {}).includes(module);
 }
 
-export function SettingsPage({ getAccessToken }: { getAccessToken: () => string | null }) {
+export function SettingsPage({ getAccessToken, userRoles = [] }: { getAccessToken: () => string | null; userRoles?: string[] }) {
   const api = useApiClient(getAccessToken);
   const { showNotice } = useNotification();
   const { boutique } = useBoutique();
+  const isSuperAdmin = userRoles.includes('ROLE_SUPER_ADMIN');
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<BoutiqueSettings>({});
 
@@ -52,6 +63,13 @@ export function SettingsPage({ getAccessToken }: { getAccessToken: () => string 
     setForm({
       contactEmail: data.contactEmail ?? '', contactPhone: data.contactPhone ?? '',
       address: data.address ?? '', city: data.city ?? '', postalCode: data.postalCode ?? '', country: data.country ?? '',
+      facebookUrl: data.facebookUrl ?? data.socialLinks?.facebook ?? '',
+      instagramUrl: data.instagramUrl ?? data.socialLinks?.instagram ?? '',
+      tiktokUrl: data.tiktokUrl ?? data.socialLinks?.tiktok ?? '',
+      youtubeUrl: data.youtubeUrl ?? data.socialLinks?.youtube ?? '',
+      linkedinUrl: data.linkedinUrl ?? data.socialLinks?.linkedin ?? '',
+      xTwitterUrl: data.xTwitterUrl ?? data.socialLinks?.x_twitter ?? '',
+      whatsappNumber: data.whatsappNumber ?? data.socialLinks?.whatsapp ?? '',
       enableEmailVerification: !!data.enableEmailVerification,
       enableCustomerEmailVerification: !!data.enableCustomerEmailVerification,
       moduleConfig: { ...(data.moduleConfig ?? {}), enable_customer_auth: data.moduleConfig?.enable_customer_auth !== false },
@@ -110,6 +128,25 @@ export function SettingsPage({ getAccessToken }: { getAccessToken: () => string 
                 <FormField label="Adresse"><Input value={form.address ?? ''} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} /></FormField>
                 <FormField label="Ville"><Input value={form.city ?? ''} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} /></FormField>
               </div>
+              <h3 style={{ marginTop: 24 }}>Réseaux sociaux</h3>
+              <p style={{ color: 'var(--bo-text-muted)', fontSize: 13, marginTop: 4 }}>
+                Les icônes apparaissent dans le footer uniquement pour les réseaux renseignés.
+              </p>
+              <div className="bo-form-row">
+                <FormField label="Facebook"><Input type="url" placeholder="https://facebook.com/..." value={form.facebookUrl ?? ''} onChange={(e) => setForm((f) => ({ ...f, facebookUrl: e.target.value }))} /></FormField>
+                <FormField label="Instagram"><Input type="url" placeholder="https://instagram.com/..." value={form.instagramUrl ?? ''} onChange={(e) => setForm((f) => ({ ...f, instagramUrl: e.target.value }))} /></FormField>
+              </div>
+              <div className="bo-form-row">
+                <FormField label="TikTok"><Input type="url" placeholder="https://tiktok.com/@..." value={form.tiktokUrl ?? ''} onChange={(e) => setForm((f) => ({ ...f, tiktokUrl: e.target.value }))} /></FormField>
+                <FormField label="YouTube"><Input type="url" placeholder="https://youtube.com/@..." value={form.youtubeUrl ?? ''} onChange={(e) => setForm((f) => ({ ...f, youtubeUrl: e.target.value }))} /></FormField>
+              </div>
+              <div className="bo-form-row">
+                <FormField label="LinkedIn"><Input type="url" placeholder="https://linkedin.com/company/..." value={form.linkedinUrl ?? ''} onChange={(e) => setForm((f) => ({ ...f, linkedinUrl: e.target.value }))} /></FormField>
+                <FormField label="X / Twitter"><Input type="url" placeholder="https://x.com/..." value={form.xTwitterUrl ?? ''} onChange={(e) => setForm((f) => ({ ...f, xTwitterUrl: e.target.value }))} /></FormField>
+              </div>
+              <FormField label="WhatsApp" hint="Numéro international ou lien https://wa.me/...">
+                <Input placeholder="216XXXXXXXX" value={form.whatsappNumber ?? ''} onChange={(e) => setForm((f) => ({ ...f, whatsappNumber: e.target.value }))} />
+              </FormField>
               <div className="bo-form-row">
                 <FormField label="Code postal"><Input value={form.postalCode ?? ''} onChange={(e) => setForm((f) => ({ ...f, postalCode: e.target.value }))} /></FormField>
                 <FormField label="Pays"><Input value={form.country ?? ''} onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))} /></FormField>
@@ -124,11 +161,17 @@ export function SettingsPage({ getAccessToken }: { getAccessToken: () => string 
                   </select>
                 </FormField>
                 <FormField label="Vérification email">
-                  <select className="bo-input" value={form.enableEmailVerification ? 'yes' : 'no'} onChange={(e) => setForm((f) => ({ ...f, enableEmailVerification: e.target.value === 'yes' }))}>
-                    <option value="yes">Activée</option><option value="no">Désactivée</option>
-                  </select>
+                    <select className="bo-input" value="yes" disabled>
+                    <option value="yes">Activée (obligatoire)</option>
+                    </select>
                 </FormField>
               </div>
+              {isSuperAdmin && (
+                <label className="bo-checkbox" style={{ marginTop: 12 }}>
+                  <input type="checkbox" checked={!!form.enableCustomerEmailVerification} onChange={(e) => setForm((f) => ({ ...f, enableCustomerEmailVerification: e.target.checked }))} />
+                  Exiger la vérification email des clients de cette boutique
+                </label>
+              )}
               <div className="bo-form-row">
                 <label className="bo-checkbox"><input type="checkbox" checked={!!form.maintenance} onChange={(e) => setForm((f) => ({ ...f, maintenance: e.target.checked }))} /> Mode maintenance</label>
                 <label className="bo-checkbox"><input type="checkbox" checked={form.moduleConfig?.enable_customer_auth !== false} onChange={(e) => setForm((f) => ({ ...f, moduleConfig: { ...(f.moduleConfig ?? {}), enable_customer_auth: e.target.checked } }))} /> Comptes clients activés</label>

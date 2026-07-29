@@ -24,6 +24,8 @@ final readonly class BackofficeNotificationService
         string $title,
         string $message,
         string $eventCode,
+        /* @param array<string, string|int|float|bool|null> $variables */
+        array $variables = [],
     ): void {
         $recipients = [];
         foreach ($this->userShops->findByRoleAndBoutique('ROLE_BOUTIQUE_ADMIN', (string) $boutique->getId()) as $userShop) {
@@ -39,7 +41,7 @@ final readonly class BackofficeNotificationService
 
         $this->em->flush();
         foreach (array_keys($recipients) as $recipient) {
-            $this->dispatchEmail($boutique, $eventCode, $recipient);
+            $this->dispatchEmail($boutique, $eventCode, $recipient, $variables);
         }
     }
 
@@ -50,14 +52,17 @@ final readonly class BackofficeNotificationService
         string $title,
         string $message,
         string $eventCode,
+        /* @param array<string, string|int|float|bool|null> $variables */
+        array $variables = [],
     ): void {
         $recipient = $user->getUserIdentifier();
         $this->notifications->notify($recipient, $type, $title, $message, $boutique);
         $this->em->flush();
-        $this->dispatchEmail($boutique, $eventCode, $recipient);
+        $this->dispatchEmail($boutique, $eventCode, $recipient, $variables);
     }
 
-    private function dispatchEmail(Boutique $boutique, string $eventCode, string $recipient): void
+    /** @param array<string, string|int|float|bool|null> $variables */
+    private function dispatchEmail(Boutique $boutique, string $eventCode, string $recipient, array $variables = []): void
     {
         if (false === filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
             return;
@@ -68,6 +73,7 @@ final readonly class BackofficeNotificationService
             $eventCode,
             NotificationChannel::Email,
             $recipient,
+            $variables,
         );
     }
 }
