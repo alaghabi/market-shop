@@ -83,6 +83,34 @@ export function Header({
   };
   const visibleNotifications = notifications.filter(canSeeNotification);
 
+  useEffect(() => {
+    if (!boutique?.id && !userRoles.includes("ROLE_SUPER_ADMIN")) return;
+
+    let disposed = false;
+    let eventSource: EventSource | null = null;
+
+    api.get('/mercure/authorize?scope=backoffice')
+      .then(() => {
+        if (disposed) return;
+
+        const mercureUrl =
+          (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_MERCURE_PUBLIC_URL
+          || 'http://localhost:3000/.well-known/mercure';
+        const url = new URL(mercureUrl);
+        url.searchParams.append('topic', boutique?.id ? `backoffice/delivery/${boutique.id}` : 'backoffice/delivery/platform');
+        eventSource = new EventSource(url, { withCredentials: true });
+        eventSource.onmessage = () => {
+          refreshNotifications();
+        };
+      })
+      .catch(() => undefined);
+
+    return () => {
+      disposed = true;
+      eventSource?.close();
+    };
+  }, [api, boutique?.id, refreshNotifications, userRoles]);
+
   const markAsRead = async (id: string) => {
     try {
       await api.patch(`/notifications/${id}/read`, {});

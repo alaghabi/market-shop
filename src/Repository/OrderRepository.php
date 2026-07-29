@@ -69,18 +69,6 @@ final class OrderRepository extends ServiceEntityRepository
             ->getResult();
     }
 
-    /** @return list<Order> */
-    public function findPendingDeliverySubmission(): array
-    {
-        return $this->createQueryBuilder('o')
-            ->andWhere('o.status = :status')
-            ->andWhere('o.submittedToDelivery = :submitted')
-            ->setParameter('status', OrderStatus::Paid)
-            ->setParameter('submitted', false)
-            ->getQuery()
-            ->getResult();
-    }
-
     public function findForPublicTracking(Boutique $boutique, string $reference): ?Order
     {
         $reference = ltrim(trim($reference), '#');

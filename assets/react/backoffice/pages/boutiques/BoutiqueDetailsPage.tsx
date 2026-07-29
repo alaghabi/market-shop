@@ -265,8 +265,11 @@ export function BoutiqueDetailsPage({
 
   const runAction = async (action: "approve" | "reject" | "suspend" | "activate" | "publish" | "unpublish") => {
     if (!boutique) return;
+    const needsReason = ["reject", "suspend", "activate", "unpublish"].includes(action);
+    const reason = needsReason ? window.prompt("Motif de cette action :")?.trim() : undefined;
+    if (needsReason && !reason) return;
     try {
-      await api.patch(`/boutiques/${encodeURIComponent(boutique.id)}/${action}`, {});
+      await api.patch(`/boutiques/${encodeURIComponent(boutique.id)}/${action}`, reason ? { reason } : {});
       showNotice("Boutique mise à jour", "success");
       refreshBoutique();
       refresh();
@@ -277,10 +280,7 @@ export function BoutiqueDetailsPage({
 
   const actionButtons = boutique && isSuperAdmin ? (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-      {boutique.status === "pending" && <>
-        <Button variant="primary" size="sm" onClick={() => runAction("approve")}>Approuver</Button>
-        <Button variant="danger" size="sm" onClick={() => runAction("reject")}>Rejeter</Button>
-      </>}
+       {boutique.status === "pending" && <Badge tone="neutral">En attente de publication</Badge>}
       {boutique.status === "active" ? (
         <Button variant="danger" size="sm" onClick={() => runAction("suspend")}>Désactiver</Button>
       ) : boutique.status !== "pending" && (

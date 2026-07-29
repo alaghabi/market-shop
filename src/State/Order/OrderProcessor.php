@@ -8,12 +8,15 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Entity\Order;
 use App\Enum\OrderStatus;
 use App\Enum\PaymentStatus;
+use App\Message\CreateShipmentMessage;
 use App\Repository\OrderRepository;
 use App\Security\BoutiqueContext;
+use App\Service\Delivery\DeliveryPaymentPolicy;
 use App\Service\Loyalty\LoyaltyEngine;
 use App\Service\NotificationService;
 use App\Service\Webhook\WebhookService;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -32,6 +35,8 @@ final readonly class OrderProcessor implements ProcessorInterface
         private LoyaltyEngine $loyaltyEngine,
         private BoutiqueContext $boutiqueContext,
         private NotificationService $notifications,
+        private MessageBusInterface $messageBus,
+        private DeliveryPaymentPolicy $deliveryPaymentPolicy,
     ) {
     }
 
@@ -90,6 +95,15 @@ final readonly class OrderProcessor implements ProcessorInterface
         }
 
         $this->em->flush();
+
+        if (
+            $previousStatus !== $order->getStatus()
+            && OrderStatus::Paid === $order->getStatus()
+            && !$order->isSubmittedToDelivery()
+            && $this->deliveryPaymentPolicy->canSubmit($order)
+        ) {
+            $this->messageBus->dispatch(new CreateShipmentMessage((string) $order->getId()));
+        }
 
         $payload = [
             'id' => (string) $order->getId(),

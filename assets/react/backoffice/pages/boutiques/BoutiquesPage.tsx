@@ -21,6 +21,9 @@ type SubscriptionRequest = {
   id: string; boutiqueId: string; boutiqueName: string;
   subscriptionPlanName: string; status: string; requestedAt: string;
 };
+type PublicationRequest = {
+  id: string; boutiqueId: string; boutiqueName: string; status: string; requestedAt: string; reason?: string | null;
+};
 
 const PAGE_SIZE = 20;
 
@@ -32,13 +35,17 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
 
   const fetchBoutiques = useCallback(() => api.getCollection<BoutiqueSummary>(`/boutiques?page=${page}&itemsPerPage=${PAGE_SIZE}`), [api, page]);
   const fetchRequests = useCallback(() => api.getCollection<SubscriptionRequest>(`/admin/subscription-requests?page=${requestsPage}&itemsPerPage=${PAGE_SIZE}`), [api, requestsPage]);
+  const fetchPublicationRequests = useCallback(() => api.getCollection<PublicationRequest>(`/admin/boutique-publication-requests?page=1&itemsPerPage=${PAGE_SIZE}`), [api]);
 
   const { data: boutiquesRes, isLoading, error, refresh } = useApiData(fetchBoutiques);
   const { data: requestsRes, refresh: refreshRequests } = useApiData(fetchRequests);
+  const { data: publicationRequestsRes, refresh: refreshPublicationRequests } = useApiData(fetchPublicationRequests);
 
   const boutiques = boutiquesRes?.member ?? [];
   const subscriptionRequests = requestsRes?.member ?? [];
   const pendingRequests = subscriptionRequests.filter((r) => r.status === 'pending');
+  const publicationRequests = publicationRequestsRes?.member ?? [];
+  const pendingPublicationRequests = publicationRequests.filter((r) => r.status === 'pending');
   const totalPages = Math.max(1, Math.ceil((boutiquesRes?.totalItems ?? 0) / PAGE_SIZE));
   const requestsTotalPages = Math.max(1, Math.ceil((requestsRes?.totalItems ?? 0) / PAGE_SIZE));
 
@@ -46,7 +53,7 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'name' | 'status' | 'createdAt' | 'products'>('createdAt');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
-  const refreshAll = useCallback(() => { refresh(); refreshRequests(); }, [refresh, refreshRequests]);
+  const refreshAll = useCallback(() => { refresh(); refreshRequests(); refreshPublicationRequests(); }, [refresh, refreshRequests, refreshPublicationRequests]);
 
   const filteredBoutiques = boutiques
     .filter((b) => statusFilter === 'all' || b.status === statusFilter)
@@ -62,8 +69,11 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
     });
 
   const runAction = async (id: string, action: string) => {
+    const needsReason = ['reject', 'suspend', 'activate', 'archive', 'unpublish'].includes(action);
+    const reason = needsReason ? window.prompt('Motif de cette action :')?.trim() : undefined;
+    if (needsReason && !reason) return;
     try {
-      await api.patch(`/boutiques/${id}/${action}`, {});
+      await api.patch(`/boutiques/${id}/${action}`, reason ? { reason } : {});
       showNotice(`Boutique ${action === 'approve' ? 'approuvée' : action === 'reject' ? 'rejetée' : action === 'suspend' ? 'désactivée' : action === 'activate' ? 'réactivée' : action === 'publish' ? 'publiée' : 'dépubliée'}`, 'success');
       refreshAll();
     } catch { showNotice('Erreur lors de la mise à jour', 'error'); }
@@ -84,6 +94,18 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
       showNotice(action === 'approve' ? 'Abonnement accepté' : 'Abonnement refusé', 'success');
       refreshAll();
     } catch { showNotice('Erreur lors du traitement', 'error'); }
+  };
+
+  const processPublicationRequest = async (id: string, action: 'approve' | 'reject') => {
+    const reason = action === 'reject' ? window.prompt('Raison du refus :')?.trim() : undefined;
+    if (action === 'reject' && !reason) return;
+    try {
+      await api.patch(`/admin/boutique-publication-requests/${id}/${action}`, action === 'reject' ? { reason } : {});
+      showNotice(action === 'approve' ? 'Boutique publiée' : 'Demande refusée', 'success');
+      refreshAll();
+    } catch (actionError) {
+      showNotice(actionError instanceof Error ? actionError.message : 'Erreur lors du traitement', 'error');
+    }
   };
 
   return (
@@ -125,6 +147,38 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
                    ))}
                    <Pagination page={requestsPage} totalPages={requestsTotalPages} onPageChange={setRequestsPage} />
                  </div>
+              )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <span>Demandes de publication ({pendingPublicationRequests.length})</span>
+                <Badge tone={pendingPublicationRequests.length > 0 ? 'warning' : 'success'}>
+                  {pendingPublicationRequests.length > 0 ? 'À traiter sous 24h' : 'À jour'}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardBody>
+              {pendingPublicationRequests.length === 0 ? (
+                <p style={{ padding: 16, textAlign: 'center', color: 'var(--bo-text-muted)', fontSize: 14 }}>Aucune demande de publication en attente.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {pendingPublicationRequests.map((request) => (
+                    <div key={request.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, border: '1px solid var(--bo-border)', background: 'var(--bo-surface)' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{request.boutiqueName}</div>
+                        <div style={{ fontSize: 12, color: 'var(--bo-text-muted)' }}>Demandée le {new Date(request.requestedAt).toLocaleDateString('fr-FR')}</div>
+                      </div>
+                      <Badge tone="warning">En attente</Badge>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <Button variant="ghost" size="sm" onClick={() => void processPublicationRequest(request.id, 'approve')}>Publier</Button>
+                        <Button variant="ghost" size="sm" style={{ color: 'var(--bo-error)' }} onClick={() => void processPublicationRequest(request.id, 'reject')}>Refuser</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </CardBody>
           </Card>
@@ -194,12 +248,7 @@ export function BoutiquesPage({ getAccessToken }: { getAccessToken: () => string
                       <Button variant="secondary" size="sm" onClick={() => window.location.assign(`/admin/boutiques/${encodeURIComponent(b.id)}`)}>Détails</Button>
                       <div style={{ fontSize: 12, color: 'var(--bo-text-muted)', whiteSpace: 'nowrap' }}>{b.productsCount ?? 0} produits</div>
                       <div className="bo-table-actions" style={{ display: 'flex', gap: 4 }}>
-                        {b.status === 'pending' && (
-                          <>
-                            <Button variant="ghost" size="sm" onClick={() => runAction(b.id, 'approve')}>Approuver</Button>
-                            <Button variant="ghost" size="sm" style={{ color: 'var(--bo-error)' }} onClick={() => runAction(b.id, 'reject')}>Rejeter</Button>
-                          </>
-                        )}
+                        {b.status === 'pending' && <Badge tone="neutral">En attente de publication</Badge>}
                         {b.status === 'active' && (
                           <Button variant="ghost" size="sm" onClick={() => runAction(b.id, 'suspend')}>Désactiver</Button>
                         )}

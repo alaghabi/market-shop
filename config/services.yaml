@@ -6,14 +6,21 @@ services:
         autowire: true
         autoconfigure: true
         bind:
-            string $oauth2Issuer: '%env(OAUTH2_ISSUER)%'
-            string $oauth2Audience: '%env(OAUTH2_AUDIENCE)%'
-            string $oauth2JwksUri: '%env(OAUTH2_JWKS_URI)%'
             string $appSecret: '%kernel.secret%'
             bool $kernelDebug: '%kernel.debug%'
             string $ollamaBaseUrl: '%env(OLLAMA_BASE_URL)%'
+            string $ollamaModel: '%env(OLLAMA_MODEL)%'
+            string $ollamaKeepAlive: '%env(OLLAMA_KEEP_ALIVE)%'
+            int $ollamaNumCtx: '%env(int:OLLAMA_NUM_CTX)%'
+            int $ollamaMaxTokens: '%env(int:OLLAMA_MAX_TOKENS)%'
+            int $ollamaMaxHistory: '%env(int:OLLAMA_MAX_HISTORY)%'
+            int $ollamaMaxMessageChars: '%env(int:OLLAMA_MAX_MESSAGE_CHARS)%'
+            int $ollamaNumThreads: '%env(int:OLLAMA_NUM_THREADS)%'
+            int $ollamaTimeout: '%env(int:OLLAMA_TIMEOUT)%'
+            array $ollamaAllowedModels: '%env(csv:OLLAMA_ALLOWED_MODELS)%'
             string $mailerFrom: '%env(MAILER_FROM)%'
             string $publicBaseUrl: '%env(APP_PUBLIC_URL)%'
+            string $rootDomain: '%env(ROOT_DOMAIN)%'
             'bool $globalEnabled': '%chatbot.global_enabled%'
             'array $modules': '%modules%'
 
@@ -27,10 +34,6 @@ services:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
             - '../src/Kernel.php'
-
-    App\Service\Workflow\Transition\:
-        resource: '../src/Service/Workflow/Transition/'
-        tags: ['app.workflow.transition']
 
     App\Service\ImageService:
         arguments:
@@ -56,6 +59,22 @@ services:
     App\Service\Boutique\ReservedSlugRegistry:
         arguments:
             $additional: '%app.reserved_slugs%'
+
+    App\Service\Auth\KeycloakRedirectUriSynchronizer:
+        arguments:
+            $adminUrl: '%env(KEYCLOAK_ADMIN_URL)%'
+            $realm: '%env(KEYCLOAK_REALM)%'
+            $clientId: '%env(KEYCLOAK_CLIENT_ID)%'
+            $adminUsername: '%env(KEYCLOAK_ADMIN_USERNAME)%'
+            $adminPassword: '%env(KEYCLOAK_ADMIN_PASSWORD)%'
+            $rootDomain: '%env(ROOT_DOMAIN)%'
+            $publicScheme: '%env(KEYCLOAK_PUBLIC_SCHEME)%'
+            $publicPort: '%env(KEYCLOAK_PUBLIC_PORT)%'
+            $enabled: '%env(bool:KEYCLOAK_REDIRECT_SYNC_ENABLED)%'
+
+    App\Factory\RedisFactory:
+        arguments:
+            $password: '%env(default::REDIS_PASSWORD)%'
 
     App\Command\MediaCleanupCommand:
         arguments:

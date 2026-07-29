@@ -74,41 +74,58 @@ export function ChatBox({
   useEffect(() => {
     if (!conversationId) return;
 
-    const mercureUrl =
-      import.meta.env?.VITE_MERCURE_PUBLIC_URL ||
-      (typeof process !== "undefined"
-        ? process.env.MERCURE_PUBLIC_URL
-        : undefined) ||
-      "http://localhost:3000/.well-known/mercure";
-    const url = new URL(mercureUrl);
-    url.searchParams.append("topic", `chat/conversation/${conversationId}`);
+    let disposed = false;
 
-    const es = new EventSource(url);
-    eventSourceRef.current = es;
+    const headers: Record<string, string> = {};
+    if (guestAccessToken) headers["X-Guest-Chat-Token"] = guestAccessToken;
 
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "typing") {
-          setBotTyping(data.senderType === "bot");
-          return;
-        }
-        if (data.type === "read") return;
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === data.id)) return prev;
-          return [...prev, data];
-        });
-        setBotTyping(false);
-      } catch {
-        /* ignore */
-      }
-    };
+    fetch(`${apiBaseUrl}/mercure/authorize?conversationId=${encodeURIComponent(conversationId)}`, {
+      headers,
+      credentials: "include",
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Mercure authorization failed");
+
+        const mercureUrl =
+          import.meta.env?.VITE_MERCURE_PUBLIC_URL ||
+          (typeof process !== "undefined"
+            ? process.env.MERCURE_PUBLIC_URL
+            : undefined) ||
+          "http://localhost:3000/.well-known/mercure";
+        const url = new URL(mercureUrl);
+        url.searchParams.append("topic", `chat/conversation/${conversationId}`);
+
+        if (disposed) return;
+
+        const es = new EventSource(url, { withCredentials: true });
+        eventSourceRef.current = es;
+
+        es.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === "typing") {
+              setBotTyping(data.senderType === "bot");
+              return;
+            }
+            if (data.type === "read") return;
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === data.id)) return prev;
+              return [...prev, data];
+            });
+            setBotTyping(false);
+          } catch {
+            /* ignore */
+          }
+        };
+      })
+      .catch(() => undefined);
 
     return () => {
-      es.close();
+      disposed = true;
+      eventSourceRef.current?.close();
       eventSourceRef.current = null;
     };
-  }, [conversationId]);
+  }, [apiBaseUrl, conversationId, guestAccessToken]);
 
   useEffect(() => {
     if (!conversationId) return;

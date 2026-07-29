@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { FormField } from './FormField';
-import { getStoredAccessToken } from '../../auth/getStoredAccessToken';
+import { authHeaders } from '../../screens/public/boutiqueRouting';
 
 type MediaFieldProps = {
   label: string;
@@ -50,8 +50,6 @@ export function MediaField({
     setError('');
 
     try {
-      const token = getStoredAccessToken();
-
       const form = new FormData();
       form.append('file', file);
        form.append('context', context);
@@ -59,7 +57,7 @@ export function MediaField({
       const query = boutiqueId ? `?boutiqueId=${encodeURIComponent(boutiqueId)}` : '';
       const resp = await fetch(`/api/media/upload${query}`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders() ?? {},
         body: form,
       });
 

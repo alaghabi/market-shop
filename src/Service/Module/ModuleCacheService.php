@@ -70,9 +70,14 @@ final readonly class ModuleCacheService
             if (!$redis) {
                 return;
             }
-            $keys = $redis->keys(self::KEY_PLATFORM.'*');
-            foreach ($keys as $key) {
-                $redis->del($key);
+            foreach ([
+                self::KEY_PLATFORM,
+                self::KEY_PLAN_PREFIX.'*'.self::KEY_PLAN_SUFFIX,
+                self::KEY_SHOP_PREFIX.'*'.self::KEY_SHOP_SUFFIX,
+            ] as $pattern) {
+                foreach ($redis->keys($pattern) as $key) {
+                    $redis->del($key);
+                }
             }
         } catch (\Throwable) {
         }

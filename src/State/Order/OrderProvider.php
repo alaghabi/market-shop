@@ -11,6 +11,7 @@ use App\Entity\OrderItem;
 use App\Entity\ProductImage;
 use App\Enum\OrderStatus;
 use App\Repository\OrderRepository;
+use App\Repository\ShipmentRepository;
 use App\Security\BoutiqueContext;
 use App\Service\Backoffice\BackofficeScopeResolver;
 use App\State\Common\BackofficePaginator;
@@ -22,6 +23,7 @@ final readonly class OrderProvider implements ProviderInterface
 {
     public function __construct(
         private OrderRepository $orders,
+        private ShipmentRepository $shipments,
         private BoutiqueContext $context,
         private BackofficeScopeResolver $scope,
     ) {
@@ -131,9 +133,20 @@ final readonly class OrderProvider implements ProviderInterface
         $output->shippingGovernorate = $order->getShippingGovernorate();
         $output->shippingLocality = $order->getShippingLocality();
         $output->deliveryStatus = $order->getDeliveryStatus();
+        $output->deliveryError = $order->getDeliveryError();
         $output->paymentStatus = $order->getPaymentStatus()->value;
         $output->paymentMethodCode = $order->getPaymentMethodCode();
         $output->deliveryTracking = $order->getDeliveryTracking();
+        $shipment = $this->shipments->findOneByOrder($order);
+        if (null !== $shipment) {
+            $output->shipmentId = (string) $shipment->getId();
+            $output->shipmentStatus = $shipment->getStatus()->value;
+            $output->deliveryCompanyName = $shipment->getDeliveryCompany()->getName();
+            $output->deliveryLabelUrl = $shipment->getLabelUrl();
+            $output->deliveryTracking ??= $shipment->getTrackingNumber();
+            $output->deliveryStatus ??= $shipment->getStatus()->value;
+            $output->deliveryError ??= $shipment->getErrorMessage();
+        }
         $output->deliveredAt = $order->getDeliveredAt()?->format(\DateTimeInterface::ATOM);
         $output->createdAt = $order->getCreatedAt();
         $output->updatedAt = $order->getCreatedAt();

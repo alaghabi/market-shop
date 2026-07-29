@@ -34,7 +34,6 @@ final class FrontendRouteProvider implements ProviderInterface
             ['boutiques', 'Toutes les boutiques', '/boutiques', 'Public', 'Marketplace publique pour découvrir les boutiques locales.'],
             ['boutique-luxe-paris', 'Luxe Paris', '/boutiques/luxe-paris', 'Public', 'Front-office client de la boutique Luxe Paris.'],
             ['robe-de-soiree', 'Robe de Soirée', '/products/robe-de-soiree', 'Public', 'Fiche produit publique avec galerie, prix et disponibilité.'],
-            ['front-chatbot', 'Assistant boutique', '/chatbot', 'Public', 'Chatbot front-office pour assister les clients.'],
             ['dashboard', 'Dashboard Back-office', '/admin', 'Admin', 'Vue générale du SaaS multi-boutique.'],
             ['super-admin-dashboard', 'Tableau de bord Super Admin', '/admin/super-admin-dashboard', 'Admin', 'Pilotage plateforme, revenus, boutiques et santé du SaaS.'],
             ['boutique-dashboard', 'Boutique Management Dashboard', '/admin/boutique-dashboard', 'Boutique', 'KPI opérationnels, commandes récentes et performance boutique.'],

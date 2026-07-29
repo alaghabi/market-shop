@@ -23,4 +23,25 @@ final class RolePermissionRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * @param list<string> $roles
+     *
+     * @return list<string>
+     */
+    public function findPermissionsByRoles(array $roles): array
+    {
+        if ([] === $roles) {
+            return [];
+        }
+
+        $permissions = $this->createQueryBuilder('rp')
+            ->select('rp.permission')
+            ->andWhere('rp.roleCode IN (:roles)')
+            ->setParameter('roles', $roles)
+            ->getQuery()
+            ->getSingleColumnResult();
+
+        return array_values(array_unique(array_map('strval', $permissions)));
+    }
 }

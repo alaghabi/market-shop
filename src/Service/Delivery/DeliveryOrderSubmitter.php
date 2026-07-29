@@ -3,10 +3,10 @@
 namespace App\Service\Delivery;
 
 use App\Entity\Order;
+use App\Repository\ShipmentRepository;
 
 /**
- * Thin adapter kept for the cron commands (app:delivery-process,
- * app:delivery-retry): decides whether an order should go through the real
+ * Thin adapter kept for the retry command: decides whether an order should go through the real
  * connector pipeline (DeliveryEngine) or the fake/no-API fallback used when
  * a boutique hasn't enabled the delivery API integration.
  */
@@ -14,6 +14,8 @@ final class DeliveryOrderSubmitter
 {
     public function __construct(
         private readonly DeliveryEngine $engine,
+        private readonly ShipmentRepository $shipments,
+        private readonly DeliveryOutcomeNotifier $outcomes,
     ) {
     }
 
@@ -30,6 +32,7 @@ final class DeliveryOrderSubmitter
         }
 
         $result = $this->engine->createShipmentForOrder($order);
+        $this->outcomes->shipmentProcessed($order, $this->shipments->findOneByOrder($order), $result);
 
         return $result->success
             ? ['success' => true, 'tracking' => $result->trackingNumber ?? '']

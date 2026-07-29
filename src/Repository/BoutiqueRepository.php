@@ -18,13 +18,13 @@ final class BoutiqueRepository extends ServiceEntityRepository
 
     public function findBySlug(string $slug): ?Boutique
     {
-        return $this->findOneBy(['slug' => $slug]);
+        return $this->findOneBy(['slug' => $slug, 'deletedAt' => null]);
     }
 
     public function findBySlugOrId(string $identifier): ?Boutique
     {
         if (Uuid::isValid($identifier)) {
-            return $this->find($identifier);
+            return $this->findOneBy(['id' => $identifier, 'deletedAt' => null]);
         }
 
         return $this->findBySlug($identifier);
@@ -38,7 +38,7 @@ final class BoutiqueRepository extends ServiceEntityRepository
     public function findVisibleTo(array $ids, bool $isSuperAdmin): array
     {
         if ($isSuperAdmin) {
-            return $this->findBy([], ['createdAt' => 'DESC']);
+            return $this->findBy(['deletedAt' => null], ['createdAt' => 'DESC']);
         }
 
         if ([] === $ids) {
@@ -47,13 +47,14 @@ final class BoutiqueRepository extends ServiceEntityRepository
 
         return $this->createQueryBuilder('boutique')
             ->andWhere('boutique.id IN (:ids)')
+            ->andWhere('boutique.deletedAt IS NULL')
             ->setParameter('ids', $ids)
             ->orderBy('boutique.createdAt', 'DESC')
             ->getQuery()
             ->getResult();
     }
 
-    /** @return array{items: list<Boutique>, total: int} */
+    /** @param list<Uuid> $ids @return array{items: list<Boutique>, total: int} */
     public function findVisibleToPaginated(array $ids, bool $isSuperAdmin, int $page, int $itemsPerPage): array
     {
         $query = $this->createQueryBuilder('boutique');
@@ -67,6 +68,8 @@ final class BoutiqueRepository extends ServiceEntityRepository
                 ->setParameter('ids', $ids);
         }
 
+        $query->andWhere('boutique.deletedAt IS NULL');
+
         return $this->paginateBoutiques($query, $page, $itemsPerPage);
     }
 
@@ -76,6 +79,7 @@ final class BoutiqueRepository extends ServiceEntityRepository
         return $this->createQueryBuilder('boutique')
             ->innerJoin('boutique.subscriptions', 'subscription')
             ->distinct()
+            ->andWhere('boutique.deletedAt IS NULL')
             ->andWhere('boutique.status = :status')
             ->andWhere('boutique.isPublished = :published')
             ->andWhere('subscription.status = :subStatus')
@@ -93,6 +97,7 @@ final class BoutiqueRepository extends ServiceEntityRepository
         $query = $this->createQueryBuilder('boutique')
             ->innerJoin('boutique.subscriptions', 'subscription')
             ->distinct()
+            ->andWhere('boutique.deletedAt IS NULL')
             ->andWhere('boutique.status = :status')
             ->andWhere('boutique.isPublished = :published')
             ->andWhere('subscription.status = :subStatus')
@@ -144,6 +149,6 @@ final class BoutiqueRepository extends ServiceEntityRepository
     /** @return list<Boutique> */
     public function findPendingValidation(): array
     {
-        return $this->findBy(['status' => \App\Enum\BoutiqueStatus::Pending], ['createdAt' => 'DESC']);
+        return $this->findBy(['status' => \App\Enum\BoutiqueStatus::Pending, 'deletedAt' => null], ['createdAt' => 'DESC']);
     }
 }

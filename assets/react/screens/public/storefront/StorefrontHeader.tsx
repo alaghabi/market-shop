@@ -98,7 +98,7 @@ export function StorefrontHeader({ boutique, showCart = true, cartItems, onSetCa
                   <ShoppingCart className="h-5 w-5" />
                 </a>
                ) : null}
-              {boutique.customerAccountsEnabled !== false && <BoutiqueAccountLink boutiqueSlug={boutique.slug} />}
+              {boutique.customerAccountsEnabled === true && <BoutiqueAccountLink boutiqueSlug={boutique.slug} />}
           </div>
         </div>
       </header>

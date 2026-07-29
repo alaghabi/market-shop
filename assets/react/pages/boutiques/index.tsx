@@ -1,6 +1,7 @@
 import { useDeferredValue, useMemo, useState, type CSSProperties } from 'react';
 import { PublicHeader } from '../../components/PublicHeader';
 import { frontOfficeUrl } from '../../backoffice/utils/frontOfficeUrl';
+import { PlatformSocialLinks } from '../../components/PlatformSocialLinks';
 
 type PublicBoutique = {
   name: string;
@@ -99,6 +100,15 @@ export function ActiveBoutiquesPage({ boutiques }: { boutiques: PublicBoutique[]
           </div>
         </div>
       </section>
+      <footer className="lovable-footer">
+        <div className="lovable-container">
+          <div className="lovable-footer__brand">
+            <a className="lovable-brand" href="/">Hanooti</a>
+            <p>Découvrez les boutiques et les commerçants présents sur Hanooti.</p>
+            <PlatformSocialLinks className="lovable-footer__socials" itemClassName="lovable-footer__social-link" />
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }

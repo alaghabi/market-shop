@@ -1,41 +1,32 @@
-<!doctype html>
-<html lang="fr">
-<body style="margin:0;background:#f4f6f8;padding:24px;font-family:Arial,sans-serif;color:#172033">
-<div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
-    <div style="padding:24px;background:#111827;color:#ffffff;text-align:center">
-        {% if logoUrl %}<img src="{{ logoUrl }}" alt="{{ boutiqueName }}" style="max-height:60px;max-width:240px;object-fit:contain">{% endif %}
-        <div style="font-size:22px;font-weight:700;margin-top:8px">{{ boutiqueName }}</div>
-    </div>
-    <div style="padding:28px">
-        <h1 style="font-size:24px;margin:0 0 10px">Commande confirmée</h1>
-        <p>Bonjour {{ customerName ?: 'cher client' }},</p>
-        <p>Merci pour votre commande. Votre commande est confirmée.</p>
-        <p><strong>Référence :</strong> #{{ orderReference }}</p>
-        <p><strong>Date :</strong> {{ orderDate|date('d/m/Y H:i') }}</p>
-        <table style="width:100%;border-collapse:collapse;margin:24px 0">
-            <thead>
-            <tr style="border-bottom:2px solid #e5e7eb;text-align:left">
-                <th style="padding:10px 4px">Produit</th>
-                <th style="padding:10px 4px;text-align:center">Qté</th>
-                <th style="padding:10px 4px;text-align:right">Total</th>
+l{% extends 'email/layout.html.twig' %}
+
+{% block content %}
+    <h1 style="font-size:24px;margin:0 0 10px">Commande confirmée</h1>
+    <p>Bonjour {{ customerName ?: 'cher client' }},</p>
+    <p>Merci pour votre commande. Votre commande est confirmée.</p>
+    <p><strong>Référence :</strong> #{{ orderReference }}</p>
+    <p><strong>Date :</strong> {{ orderDate|date('d/m/Y H:i') }}</p>
+    <table style="width:100%;border-collapse:collapse;margin:24px 0">
+        <thead>
+        <tr style="border-bottom:2px solid {{ primaryColor }};text-align:left">
+            <th style="padding:10px 4px">Produit</th>
+            <th style="padding:10px 4px;text-align:center">Qté</th>
+            <th style="padding:10px 4px;text-align:right">Total</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for item in items %}
+            <tr style="border-bottom:1px solid #e5e7eb">
+                <td style="padding:12px 4px">
+                    {% if item.image %}<img src="{{ item.image }}" alt="" width="42" height="42" style="vertical-align:middle;object-fit:cover;border-radius:6px;margin-right:8px">{% endif %}
+                    <strong>{{ item.name }}</strong>
+                    {% if item.sku %}<br><small style="color:#6b7280">SKU : {{ item.sku }}</small>{% endif %}
+                </td>
+                <td style="padding:12px 4px;text-align:center">{{ item.quantity }}</td>
+                <td style="padding:12px 4px;text-align:right">{{ ((item.totalCents) / 100)|number_format(2, ',', ' ') }} {{ currency }}</td>
             </tr>
-            </thead>
-            <tbody>
-            {% for item in items %}
-                <tr style="border-bottom:1px solid #e5e7eb">
-                    <td style="padding:12px 4px">
-                        {% if item.image %}<img src="{{ item.image }}" alt="" width="42" height="42" style="vertical-align:middle;object-fit:cover;border-radius:6px;margin-right:8px">{% endif %}
-                        <strong>{{ item.name }}</strong>
-                        {% if item.sku %}<br><small style="color:#6b7280">SKU : {{ item.sku }}</small>{% endif %}
-                    </td>
-                    <td style="padding:12px 4px;text-align:center">{{ item.quantity }}</td>
-                    <td style="padding:12px 4px;text-align:right">{{ ((item.totalCents) / 100)|number_format(2, ',', ' ') }} {{ currency }}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        <div style="text-align:right;font-size:18px"><strong>Total : {{ (totalCents / 100)|number_format(2, ',', ' ') }} {{ currency }}</strong></div>
-    </div>
-</div>
-</body>
-</html>
+        {% endfor %}
+        </tbody>
+    </table>
+    <div style="text-align:right;font-size:18px"><strong>Total : {{ (totalCents / 100)|number_format(2, ',', ' ') }} {{ currency }}</strong></div>
+{% endblock %}

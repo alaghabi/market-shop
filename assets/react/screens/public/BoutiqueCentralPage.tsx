@@ -77,7 +77,6 @@ export function BoutiqueCentralPage({ title, description }: { title: string; des
           </a>
           <nav className="hidden items-center gap-6 md:flex" aria-label="Navigation publique">
             <a className="font-semibold text-[color:var(--ds-on-surface-variant)] no-underline" href="/boutiques">Boutiques</a>
-            <a className="font-semibold text-[color:var(--ds-on-surface-variant)] no-underline" href="/chatbot">Assistant</a>
             <a className="rounded-full bg-[color:var(--ds-on-surface)] px-4 py-2 font-semibold text-white no-underline" href="/admin">Back-office</a>
           </nav>
         </div>

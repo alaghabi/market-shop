@@ -40,10 +40,19 @@ final class DeliveryEngine
     public function createShipmentForOrder(Order $order, ?BoutiqueDeliveryAccount $account = null): DeliveryResult
     {
         $boutique = $order->getBoutique();
+
+        if ($order->isSubmittedToDelivery()) {
+            return DeliveryResult::fail('Cette commande a déjà été envoyée à un transporteur.');
+        }
+
         $account ??= $this->resolveDefaultAccount($boutique);
 
         if (null === $account) {
-            return DeliveryResult::fail('Aucun compte livraison actif et vérifié pour cette boutique.');
+            $error = 'Aucun compte livraison actif et vérifié pour cette boutique.';
+            $order->markDeliveryError($error);
+            $this->em->flush();
+
+            return DeliveryResult::fail($error);
         }
 
         $lockKey = 'delivery:lock:order:'.$order->getId();
@@ -54,13 +63,18 @@ final class DeliveryEngine
         try {
             $company = $account->getDeliveryCompany();
             if (!$account->isActive()) {
-                return DeliveryResult::fail('Le compte livraison de cette boutique est désactivé.');
+                $error = 'Le compte livraison de cette boutique est désactivé.';
+                $order->markDeliveryError($error);
+                $this->em->flush();
+
+                return DeliveryResult::fail($error);
             }
 
             $authentication = $this->testConnection($account);
             if (!$authentication->success) {
                 $error = $authentication->errorMessage ?? 'Authentification transporteur refusée.';
                 $order->markDeliveryError($error);
+                $this->em->flush();
 
                 return $authentication;
             }
@@ -71,7 +85,11 @@ final class DeliveryEngine
             }
 
             if ([] === ($company->getMappingConfig() ?? [])) {
-                return DeliveryResult::fail('Aucun mapping configuré pour ce transporteur.');
+                $error = 'Aucun mapping configuré pour ce transporteur.';
+                $order->markDeliveryError($error);
+                $this->em->flush();
+
+                return DeliveryResult::fail($error);
             }
 
             $connector = $this->connectors->resolve($company->getProvider());

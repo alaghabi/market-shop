@@ -143,9 +143,14 @@ export type Order = {
   shippingGovernorate?: string | null;
   shippingLocality?: string | null;
   deliveryStatus?: string | null;
+  deliveryError?: string | null;
   paymentStatus?: string;
   paymentMethodCode?: string | null;
   deliveryTracking?: string | null;
+  shipmentId?: string | null;
+  shipmentStatus?: string | null;
+  deliveryCompanyName?: string | null;
+  deliveryLabelUrl?: string | null;
   deliveredAt?: string | null;
   createdAt: string;
 };

@@ -6,6 +6,7 @@ use App\Event\MessageSentEvent;
 use App\Message\ChatbotQueryMessage;
 use App\Repository\ChatbotConfigRepository;
 use App\Service\Chat\MercurePublisher;
+use App\Service\Chat\ChatbotCapabilityService;
 use App\Service\Chat\MessageNotificationService;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -16,6 +17,7 @@ final class MessageEventSubscriber implements EventSubscriberInterface
         private MercurePublisher $mercurePublisher,
         private MessageNotificationService $notificationService,
         private ChatbotConfigRepository $configRepository,
+        private ChatbotCapabilityService $chatbotCapability,
         private MessageBusInterface $messageBus,
     ) {
     }
@@ -59,8 +61,8 @@ final class MessageEventSubscriber implements EventSubscriberInterface
         $conversation = $message->getConversation();
         $boutique = $conversation->getBoutique();
 
-        $config = $this->configRepository->findEnabledByBoutique($boutique);
-        if (null === $config) {
+        $config = $this->configRepository->findOneByBoutique($boutique);
+        if (!$this->chatbotCapability->canDispatchAi($boutique, $config)) {
             return;
         }
 

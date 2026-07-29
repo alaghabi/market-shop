@@ -1,5 +1,6 @@
 /.env.local
 /.env.*.local
+/secrets/
 /vendor/
 /node_modules/
 /var/cache/
@@ -14,6 +15,7 @@
 
 ###> symfony/framework-bundle ###
 /.env.local
+/.env.*.local
 /.env.local.php
 /.env.*.local
 /config/secrets/prod/prod.decrypt.private.php

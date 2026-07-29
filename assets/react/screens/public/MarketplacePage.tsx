@@ -4,6 +4,7 @@ import { BrandLogo } from '../../components/BrandLogo';
 import { frontOfficeUrl } from '../../backoffice/utils/frontOfficeUrl';
 import { Badge, Button, Card, Input } from '../../components/ui';
 import { appIcons } from '../../icons/fontAwesome';
+import { PlatformSocialLinks } from '../../components/PlatformSocialLinks';
 
 type PublicBoutique = {
   name: string;
@@ -95,9 +96,6 @@ export function MarketplacePage({ title, description, boutiques }: MarketplacePa
           <nav className="hidden items-center gap-4 md:flex" aria-label="Navigation publique">
             <a className="rounded-full px-4 py-2 font-semibold text-[color:var(--ds-on-surface-variant)] no-underline transition-colors hover:bg-[color:var(--ds-surface-container-low)] hover:text-[color:var(--ds-on-surface)]" href="/boutiques">
               Boutiques
-            </a>
-            <a className="rounded-full px-4 py-2 font-semibold text-[color:var(--ds-on-surface-variant)] no-underline transition-colors hover:bg-[color:var(--ds-surface-container-low)] hover:text-[color:var(--ds-on-surface)]" href="/chatbot">
-              Assistant
             </a>
             <Button type="button" variant="secondary" onClick={() => { window.location.href = '/admin'; }}>
               Back-office
@@ -341,13 +339,16 @@ export function MarketplacePage({ title, description, boutiques }: MarketplacePa
             <p className="mt-4 max-w-sm text-sm text-[color:var(--ds-on-surface-variant)]">
               Marketplace public pour découvrir les boutiques, explorer les vitrines et accéder au back-office.
             </p>
+            <PlatformSocialLinks
+              className="mt-5 flex flex-wrap items-center gap-3"
+              itemClassName="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--ds-outline-variant)] text-[color:var(--ds-on-surface-variant)] transition hover:-translate-y-0.5 hover:text-[color:var(--ds-primary)]"
+            />
           </div>
 
           <div>
             <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-[color:var(--ds-on-surface-variant)]">Explorer</h3>
             <ul className="mt-4 space-y-3 text-sm">
               <li><a className="no-underline text-[color:var(--ds-on-surface-variant)] hover:text-[color:var(--ds-on-surface)]" href="/boutiques">Boutiques</a></li>
-              <li><a className="no-underline text-[color:var(--ds-on-surface-variant)] hover:text-[color:var(--ds-on-surface)]" href="/chatbot">Assistant</a></li>
               <li><a className="no-underline text-[color:var(--ds-on-surface-variant)] hover:text-[color:var(--ds-on-surface)]" href="/admin">Back-office</a></li>
             </ul>
           </div>

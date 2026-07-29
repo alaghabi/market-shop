@@ -47,6 +47,8 @@ class User extends AbstractEntity implements UserInterface, SoftDeletableInterfa
         private UserStatus $status = UserStatus::Pending,
         #[ORM\Column(nullable: true)]
         private ?\DateTimeImmutable $lastLoginAt = null,
+        #[ORM\Column(nullable: true)]
+        private ?\DateTimeImmutable $emailVerifiedAt = null,
         #[ORM\OneToMany(mappedBy: 'user', targetEntity: UserShop::class, cascade: ['persist'], orphanRemoval: true)]
         private ?Collection $userShops = null,
     ) {
@@ -65,6 +67,9 @@ class User extends AbstractEntity implements UserInterface, SoftDeletableInterfa
 
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $updatedAt = null;
+
+    #[ORM\Column(length: 255, nullable: true, unique: true)]
+    private ?string $keycloakSubject = null;
 
     public function getCreatedAt(): \DateTimeImmutable
     {
@@ -89,6 +94,17 @@ class User extends AbstractEntity implements UserInterface, SoftDeletableInterfa
     public function getUserIdentifier(): string
     {
         return $this->identifier;
+    }
+
+    public function getKeycloakSubject(): ?string
+    {
+        return $this->keycloakSubject;
+    }
+
+    public function setKeycloakSubject(?string $keycloakSubject): void
+    {
+        $this->keycloakSubject = $keycloakSubject;
+        $this->touch();
     }
 
     public function getDisplayName(): ?string
@@ -167,6 +183,22 @@ class User extends AbstractEntity implements UserInterface, SoftDeletableInterfa
     public function getStatus(): UserStatus
     {
         return $this->status;
+    }
+
+    public function isEmailVerified(): bool
+    {
+        return null !== $this->emailVerifiedAt;
+    }
+
+    public function getEmailVerifiedAt(): ?\DateTimeImmutable
+    {
+        return $this->emailVerifiedAt;
+    }
+
+    public function markEmailVerified(): void
+    {
+        $this->emailVerifiedAt = new \DateTimeImmutable();
+        $this->touch();
     }
 
     public function setStatus(UserStatus $status): void

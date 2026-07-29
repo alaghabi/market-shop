@@ -291,6 +291,12 @@ class Boutique extends AbstractEntity implements SoftDeletableInterface
         return $this->rejectionReason;
     }
 
+    public function setRejectionReason(?string $reason): void
+    {
+        $this->rejectionReason = $reason;
+        $this->touch();
+    }
+
     public function approve(?string $approvedBy = null): void
     {
         $this->status = BoutiqueStatus::Active;
@@ -491,9 +497,9 @@ class Boutique extends AbstractEntity implements SoftDeletableInterface
         return $this->isPublished && $this->hasActiveSubscription();
     }
 
-    public function getSubdomainUrl(): string
+    public function getSubdomainUrl(string $rootDomain): string
     {
-        return sprintf('https://%s.%s', $this->slug, 'hanooti.com');
+        return sprintf('https://%s.%s', $this->slug, trim($rootDomain, '.'));
     }
 
     public function getCreatedAt(): \DateTimeImmutable

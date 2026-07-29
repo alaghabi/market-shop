@@ -1,0 +1,11 @@
+{% extends 'email/layout.html.twig' %}
+
+{% block content %}
+    <h1>Vérifiez votre adresse email</h1>
+    <p>Bonjour {{ name }},</p>
+    <p>Confirmez votre adresse email pour activer votre accès à votre espace boutique.</p>
+    <p style="text-align:center;margin:28px 0">
+        <a href="{{ verificationUrl }}" style="display:inline-block;background:{{ primaryColor }};color:#fff;text-decoration:none;padding:13px 22px;border-radius:{{ borderRadius }};font-weight:700">Vérifier mon email</a>
+    </p>
+    <p style="font-size:13px;color:#64748b">Ce lien expire dans 24 heures. Si vous n’êtes pas à l’origine de cette demande, ignorez cet email.</p>
+{% endblock %}

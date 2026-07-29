@@ -11,6 +11,7 @@ use App\Repository\BoutiqueRepository;
 use App\Repository\UserRepository;
 use App\Security\LocalTokenManager;
 use App\Service\NotificationService;
+use App\Service\Auth\EmailVerificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -25,6 +26,7 @@ final readonly class AuthController
         private BoutiqueRepository $boutiques,
         private LocalTokenManager $tokens,
         private NotificationService $notifications,
+        private EmailVerificationService $emailVerification,
         private Security $security,
     ) {
     }
@@ -74,6 +76,10 @@ final readonly class AuthController
 
         $this->entityManager->flush();
 
+        if ($this->requiresEmailVerification($user) && !$user->isEmailVerified()) {
+            $this->emailVerification->issue($user, $boutique);
+        }
+
         return new JsonResponse([
             'message' => 'Utilisateur créé avec succès.',
             'user' => [
@@ -96,6 +102,10 @@ final readonly class AuthController
 
         if (!$user instanceof User || !$user->isPasswordValid($password)) {
             return new JsonResponse(['message' => 'Identifiants invalides.'], JsonResponse::HTTP_UNAUTHORIZED);
+        }
+
+        if ($this->requiresEmailVerification($user) && !$user->isEmailVerified()) {
+            return new JsonResponse(['message' => 'Veuillez vérifier votre adresse email avant de vous connecter.', 'code' => 'email_verification_required'], JsonResponse::HTTP_FORBIDDEN);
         }
 
         if (UserStatus::Suspended === $user->getStatus()) {
@@ -145,19 +155,24 @@ final readonly class AuthController
             null,
             'boutique_created',
             'Nouvelle boutique en attente',
-            sprintf('La boutique "%s" a été créée par %s et attend une validation Super Admin.', $boutique->getName(), $email),
+            sprintf('La boutique "%s" a été créée par %s et attend la vérification de son adresse email.', $boutique->getName(), $email),
             $boutique,
         );
         $this->notifications->notify(
             $email,
             'boutique_pending',
-            'Boutique en attente de validation',
-            sprintf('Votre boutique "%s" a été enregistrée et attend la validation du Super Admin.', $boutique->getName()),
+            'Vérification email nécessaire',
+            sprintf('Votre boutique "%s" a été enregistrée. Vérifiez votre email, puis demandez sa publication depuis votre back-office.', $boutique->getName()),
             $boutique,
         );
         $this->entityManager->flush();
 
-        return $this->authResponse($user, JsonResponse::HTTP_CREATED);
+        $this->emailVerification->issue($user, $boutique);
+
+        return new JsonResponse([
+            'message' => 'Compte créé. Vérifiez votre email pour activer votre accès. La boutique pourra ensuite demander sa publication.',
+            'verificationRequired' => true,
+        ], JsonResponse::HTTP_CREATED);
     }
 
     /** @return array<string, mixed> */
@@ -240,5 +255,12 @@ final readonly class AuthController
         $email = strtolower(trim($email));
 
         return 'super-admin@market-shop.loca' === $email ? 'super-admin@market-shop.local' : $email;
+    }
+
+    private function requiresEmailVerification(User $user): bool
+    {
+        return in_array('ROLE_BOUTIQUE_ADMIN', $user->getRoles(), true)
+            || in_array('ROLE_CAISSIER', $user->getRoles(), true)
+            || in_array('ROLE_EMPLOYEE', $user->getRoles(), true);
     }
 }

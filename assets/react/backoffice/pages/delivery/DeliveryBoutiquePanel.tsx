@@ -245,8 +245,8 @@ export function DeliveryBoutiquePanel({ getAccessToken }: { getAccessToken: () =
     }
     setCreatingShipment(true);
     try {
-      await api.post('/delivery/shipments', { orderId: shipmentOrderId.trim(), accountId: shipmentAccountId || null });
-      showNotice('Expédition créée', 'success');
+      await api.post('/delivery/shipments/queue', { orderId: shipmentOrderId.trim(), accountId: shipmentAccountId || null });
+      showNotice('Expédition mise en file de traitement', 'success');
       setShipmentModalOpen(false);
       refreshShipments();
     } catch (error) {

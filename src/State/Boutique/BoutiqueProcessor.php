@@ -3,8 +3,10 @@
 namespace App\State\Boutique;
 
 use ApiPlatform\Metadata\Operation;
+use ApiPlatform\Metadata\Delete;
 use ApiPlatform\State\ProcessorInterface;
 use App\Dto\Boutique\BoutiqueInput;
+use App\Dto\Boutique\BoutiqueActionInput;
 use App\Dto\Boutique\BoutiqueOutput;
 use App\Entity\Boutique;
 use App\Entity\BoutiqueSettings;
@@ -12,12 +14,15 @@ use App\Enum\BoutiqueStatus;
 use App\Repository\BoutiqueRepository;
 use App\Security\BoutiqueContext;
 use App\Service\Boutique\ReservedSlugRegistry;
+use App\Service\Auth\KeycloakRedirectUriSynchronizer;
 use App\Service\Notification\BackofficeNotificationService;
+use App\Service\NotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Psr\Log\LoggerInterface;
 
 final class BoutiqueProcessor implements ProcessorInterface
 {
@@ -27,29 +32,43 @@ final class BoutiqueProcessor implements ProcessorInterface
         private readonly BoutiqueContext $context,
         private readonly BackofficeNotificationService $notifications,
         private readonly ReservedSlugRegistry $reservedSlugs,
+        private readonly NotificationService $notificationService,
+        private readonly KeycloakRedirectUriSynchronizer $keycloakRedirectUris,
+        private readonly LoggerInterface $logger,
+        private readonly string $rootDomain,
     ) {
     }
 
-    public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): BoutiqueOutput
+    public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): ?BoutiqueOutput
     {
         $isSuperAdmin = $this->context->isSuperAdmin();
         $operationName = $operation->getName() ?? '';
 
+        if ($operation instanceof Delete) {
+            $entity = $this->findBoutique((string) ($uriVariables['id'] ?? ''));
+            $entity->delete();
+            $entity->archive();
+            $this->em->flush();
+
+            return null;
+        }
+
         if (isset($uriVariables['id']) && in_array($operationName, ['approve_boutique', 'reject_boutique', 'suspend_boutique', 'activate_boutique', 'archive_boutique', 'publish_boutique', 'unpublish_boutique'], true)) {
             $entity = $this->findBoutique((string) $uriVariables['id']);
 
+            $reason = $data instanceof BoutiqueActionInput ? trim((string) ($data->reason ?? '')) : null;
             match ($operationName) {
-                'approve_boutique' => $this->approveBoutique($entity),
-                'reject_boutique' => $this->rejectBoutique($entity),
-                'suspend_boutique' => $this->suspendBoutique($entity),
-                'activate_boutique' => $this->activateBoutique($entity),
-                'archive_boutique' => $this->archiveBoutique($entity),
-                'publish_boutique' => $this->publishBoutique($entity),
-                'unpublish_boutique' => $this->unpublishBoutique($entity),
-                default => throw new \InvalidArgumentException('Unknown operation: '.$operationName),
+                'approve_boutique' => $this->approveBoutique($entity, $reason),
+                'reject_boutique' => $this->rejectBoutique($entity, $reason),
+                'suspend_boutique' => $this->suspendBoutique($entity, $reason),
+                'activate_boutique' => $this->activateBoutique($entity, $reason),
+                'archive_boutique' => $this->archiveBoutique($entity, $reason),
+                'publish_boutique' => $this->publishBoutique($entity, $reason),
+                'unpublish_boutique' => $this->unpublishBoutique($entity, $reason),
             };
 
             $this->em->flush();
+            $this->syncKeycloakRedirectUris($entity);
 
             return $this->toOutput($entity);
         }
@@ -80,15 +99,32 @@ final class BoutiqueProcessor implements ProcessorInterface
             $this->applyInput($entity, $data);
             $entity->setStatus($isSuperAdmin ? BoutiqueStatus::Active : BoutiqueStatus::Pending);
             $this->em->persist($entity);
-            $this->notifications->notify(null, 'boutique_created', 'Nouvelle boutique', sprintf('La boutique "%s" a été créée avec le statut %s.', $entity->getName(), $entity->getStatus()->value), $entity);
+            $this->notificationService->notify(null, 'boutique_created', 'Nouvelle boutique', sprintf('La boutique "%s" a été créée avec le statut %s.', $entity->getName(), $entity->getStatus()->value), $entity);
         }
 
         $this->em->flush();
+        $this->syncKeycloakRedirectUris($entity);
 
         return $this->toOutput($entity);
     }
 
-    private function approveBoutique(Boutique $entity): void
+    private function syncKeycloakRedirectUris(Boutique $boutique): void
+    {
+        if (!$boutique->isPublished() || $boutique->isDeleted()) {
+            return;
+        }
+
+        try {
+            $this->keycloakRedirectUris->syncBoutique($boutique);
+        } catch (\Throwable $exception) {
+            $this->logger->error('Keycloak redirect URI synchronization failed.', [
+                'boutique' => $boutique->getSlug(),
+                'exception' => $exception,
+            ]);
+        }
+    }
+
+    private function approveBoutique(Boutique $entity, ?string $reason = null): void
     {
         $entity->approve($this->context->getUserIdentifier());
 
@@ -96,54 +132,54 @@ final class BoutiqueProcessor implements ProcessorInterface
             $userShop->setStatus(\App\Enum\UserStatus::Active);
         }
 
-        $this->notifyAdmins($entity, 'boutique.approved', 'Boutique approuvée', sprintf('La boutique "%s" a été approuvée.', $entity->getName()));
+        $this->notifyAdmins($entity, 'boutique.approved', 'Boutique approuvée', sprintf('La boutique "%s" a été approuvée.', $entity->getName()), $reason);
     }
 
-    private function rejectBoutique(Boutique $entity): void
+    private function rejectBoutique(Boutique $entity, ?string $reason = null): void
     {
-        $entity->reject();
+        $entity->reject($reason);
 
         foreach ($entity->getUserShops() as $userShop) {
             $userShop->setStatus(\App\Enum\UserStatus::Rejected);
         }
 
-        $this->notifyAdmins($entity, 'boutique.rejected', 'Boutique rejetée', sprintf('La boutique "%s" a été rejetée.', $entity->getName()));
+        $this->notifyAdmins($entity, 'boutique.rejected', 'Boutique rejetée', sprintf('La boutique "%s" a été rejetée.%s', $entity->getName(), $reason ? ' Raison : '.$reason : ''), $reason);
     }
 
-    private function suspendBoutique(Boutique $entity): void
+    private function suspendBoutique(Boutique $entity, ?string $reason = null): void
     {
         $entity->suspend();
 
-        $this->notifyAdmins($entity, 'boutique.suspended', 'Boutique suspendue', sprintf('La boutique "%s" a été suspendue.', $entity->getName()));
+        $this->notifyAdmins($entity, 'boutique.suspended', 'Boutique suspendue', sprintf('La boutique "%s" a été suspendue.%s', $entity->getName(), $reason ? ' Raison : '.$reason : ''), $reason);
     }
 
-    private function activateBoutique(Boutique $entity): void
+    private function activateBoutique(Boutique $entity, ?string $reason = null): void
     {
         $entity->reactivate();
 
-        $this->notifyAdmins($entity, 'boutique.activated', 'Boutique réactivée', sprintf('La boutique "%s" a été réactivée.', $entity->getName()));
+        $this->notifyAdmins($entity, 'boutique.activated', 'Boutique réactivée', sprintf('La boutique "%s" a été réactivée.%s', $entity->getName(), $reason ? ' Motif : '.$reason : ''), $reason);
     }
 
-    private function archiveBoutique(Boutique $entity): void
+    private function archiveBoutique(Boutique $entity, ?string $reason = null): void
     {
         $entity->archive();
 
-        $this->notifyAdmins($entity, 'boutique.archived', 'Boutique archivée', sprintf('La boutique "%s" a été archivée.', $entity->getName()));
+        $this->notifyAdmins($entity, 'boutique.archived', 'Boutique archivée', sprintf('La boutique "%s" a été archivée.%s', $entity->getName(), $reason ? ' Raison : '.$reason : ''), $reason);
     }
 
-    private function publishBoutique(Boutique $entity): void
+    private function publishBoutique(Boutique $entity, ?string $reason = null): void
     {
         $entity->publish();
-        $this->notifyAdmins($entity, 'boutique.published', 'Boutique publiée', sprintf('La boutique "%s" est maintenant publique.', $entity->getName()));
+        $this->notifyAdmins($entity, 'boutique.published', 'Boutique publiée', sprintf('La boutique "%s" est maintenant publique.%s', $entity->getName(), $reason ? ' Motif : '.$reason : ''), $reason);
     }
 
-    private function unpublishBoutique(Boutique $entity): void
+    private function unpublishBoutique(Boutique $entity, ?string $reason = null): void
     {
         $entity->unpublish();
-        $this->notifyAdmins($entity, 'boutique.unpublished', 'Boutique dépubliée', sprintf('La boutique "%s" n’est plus publique.', $entity->getName()));
+        $this->notifyAdmins($entity, 'boutique.unpublished', 'Boutique dépubliée', sprintf('La boutique "%s" n’est plus publique.%s', $entity->getName(), $reason ? ' Raison : '.$reason : ''), $reason);
     }
 
-    private function notifyAdmins(Boutique $boutique, string $eventCode, string $title, string $message): void
+    private function notifyAdmins(Boutique $boutique, string $eventCode, string $title, string $message, ?string $reason = null): void
     {
         $this->notifications->notifyBoutiqueAdmins(
             $boutique,
@@ -151,6 +187,7 @@ final class BoutiqueProcessor implements ProcessorInterface
             $title,
             $message,
             $eventCode,
+            $reason ? ['reason' => $reason] : [],
         );
     }
 
@@ -224,7 +261,7 @@ final class BoutiqueProcessor implements ProcessorInterface
         $output->totalRevenue = $entity->getTotalRevenue();
         $output->hasActiveSubscription = $entity->hasActiveSubscription();
         $output->isVisiblePublicly = $entity->isVisiblePublicly();
-        $output->subdomainUrl = $entity->getSubdomainUrl();
+        $output->subdomainUrl = $entity->getSubdomainUrl($this->rootDomain);
 
         return $output;
     }
@@ -249,7 +286,7 @@ final class BoutiqueProcessor implements ProcessorInterface
     private function findBoutique(string $id): Boutique
     {
         $entity = $this->repository->find($id);
-        if (!$entity) {
+        if (!$entity || $entity->isDeleted()) {
             throw new NotFoundHttpException('Boutique not found');
         }
 

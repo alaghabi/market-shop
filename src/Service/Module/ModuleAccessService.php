@@ -105,7 +105,7 @@ final readonly class ModuleAccessService
         if ([] === $allowedCodes) {
             $planModules = $plan->getModules();
             if (null === $planModules) {
-                return true;
+                return false;
             }
 
             $allowedMap = array_fill_keys($planModules, true);

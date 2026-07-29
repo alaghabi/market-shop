@@ -11,11 +11,9 @@ Encore
   .enablePostCssLoader()
   .enableSingleRuntimeChunk()
   .addPlugin(new webpack.DefinePlugin({
-    'process.env.OAUTH2_AUTHORITY': JSON.stringify(process.env.OAUTH2_AUTHORITY || ''),
-    'process.env.OAUTH2_CLIENT_ID': JSON.stringify(process.env.OAUTH2_CLIENT_ID || ''),
-    'process.env.OAUTH2_REDIRECT_URI': JSON.stringify(process.env.OAUTH2_REDIRECT_URI || ''),
-    'process.env.OAUTH2_POST_LOGOUT_REDIRECT_URI': JSON.stringify(process.env.OAUTH2_POST_LOGOUT_REDIRECT_URI || ''),
-    'process.env.OAUTH2_SCOPE': JSON.stringify(process.env.OAUTH2_SCOPE || ''),
+    'process.env.MERCURE_PUBLIC_URL': JSON.stringify(process.env.MERCURE_PUBLIC_URL || ''),
+    'process.env.KEYCLOAK_PUBLIC_URL': JSON.stringify(process.env.KEYCLOAK_PUBLIC_URL || ''),
+    'process.env.KEYCLOAK_CLIENT_ID': JSON.stringify(process.env.KEYCLOAK_CLIENT_ID || ''),
   }))
   .cleanupOutputBeforeBuild()
   .enableSourceMaps(!Encore.isProduction())

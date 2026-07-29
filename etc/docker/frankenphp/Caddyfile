@@ -3,7 +3,14 @@
 }
 
 {$SERVER_NAME:localhost} {
-    root * /app/public
-    encode zstd br gzip
-    php_server
+    @keycloak host auth.localhost
+    handle @keycloak {
+        reverse_proxy keycloak:8080
+    }
+
+    handle {
+        root * /app/public
+        encode zstd br gzip
+        php_server
+    }
 }

@@ -1,15 +1,35 @@
+let currentAccessToken: string | null = null;
+const storageKey = 'market-shop.auth.access-token';
+
 export function getStoredAccessToken(): string | null {
-  const raw = window.localStorage.getItem('market-shop.auth');
-  if (!raw) return null;
+  if (currentAccessToken) return currentAccessToken;
 
   try {
-    const token = (JSON.parse(raw) as { accessToken?: string }).accessToken ?? null;
-
-    if (!token || isAccessTokenExpired(token)) return null;
-
-    return token;
+    return window.sessionStorage.getItem(storageKey);
   } catch {
     return null;
+  }
+}
+
+export function setCurrentAccessToken(token: string | null): void {
+  currentAccessToken = token;
+}
+
+export function persistAccessToken(token: string): void {
+  currentAccessToken = token;
+
+  try {
+    window.sessionStorage.setItem(storageKey, token);
+  } catch {
+    // The in-memory token remains usable when storage is unavailable.
+  }
+}
+
+export function clearStoredAccessToken(): void {
+  try {
+    window.sessionStorage.removeItem(storageKey);
+  } catch {
+    // Storage cleanup is best effort.
   }
 }
 

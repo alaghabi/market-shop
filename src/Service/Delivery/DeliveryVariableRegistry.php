@@ -4,6 +4,7 @@ namespace App\Service\Delivery;
 
 use App\Entity\Boutique;
 use App\Entity\Order;
+use App\Enum\PaymentMethodType;
 
 /**
  * Catalog of internal variables exposed to the dynamic mapping engine, and
@@ -101,7 +102,9 @@ final class DeliveryVariableRegistry
             'order.weight' => round($weightGrams / 1000, 3),
             'order.currency' => $order->getCurrency(),
             'order.created_at' => $order->getCreatedAt()->format('c'),
-            'order.cod_amount' => round($order->getTotalCents() / 100, 3),
+            'order.cod_amount' => PaymentMethodType::CashOnDelivery->value === strtoupper((string) $order->getPaymentMethodCode())
+                ? round($order->getTotalCents() / 100, 3)
+                : 0,
 
             'customer.first_name' => $firstName,
             'customer.last_name' => $lastName,

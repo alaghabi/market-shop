@@ -29,6 +29,7 @@ type PaymentMethod = {
   id: string;
   code: string;
   name: string;
+  type?: string;
 };
 
 type CartOutput = {
@@ -196,7 +197,10 @@ export function CheckoutPage() {
         setPaymentMethods(items);
         setForm((current) => ({
           ...current,
-          paymentMethodCode: current.paymentMethodCode || items[0]?.code || '',
+          paymentMethodCode: current.paymentMethodCode
+            || items.find((method) => method.type === 'CASH_ON_DELIVERY' || method.code === 'CASH_ON_DELIVERY')?.code
+            || items[0]?.code
+            || '',
         }));
       } catch (error) {
         if (!cancelled) {
@@ -495,7 +499,7 @@ export function CheckoutPage() {
               <p>{selectedLocality?.name || 'Ville'}{selectedGovernorate ? `, ${selectedGovernorate.name}` : ''}</p>
               <p>{selectedCountry?.name || 'Pays'}{form.postalCode ? ` • ${form.postalCode}` : ''}</p>
             </div>
-            <Button variant="primary" className="mt-6 w-full" disabled={!isAddressReady || !form.paymentMethodCode || isLoadingCountries || isLoadingGovernorates || isLoadingLocalities || isSubmitting} onClick={() => { void submitCheckout(); }}>{isSubmitting ? 'Confirmation...' : 'Confirmer et payer'}</Button>
+            <Button variant="primary" className="mt-6 w-full" disabled={!isAddressReady || !form.paymentMethodCode || isLoadingCountries || isLoadingGovernorates || isLoadingLocalities || isSubmitting} onClick={() => { void submitCheckout(); }}>{isSubmitting ? 'Confirmation...' : form.paymentMethodCode === 'CASH_ON_DELIVERY' ? 'Confirmer la commande' : 'Confirmer et payer'}</Button>
           </Card>
         </div>
       </section>

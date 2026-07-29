@@ -30,6 +30,7 @@ final readonly class AppConfigService
     public function update(array $data): array
     {
         $config = $this->mergeConfig($this->get(), $data, $this->defaults());
+        $config['platform_social_links'] = $this->normalizeSocialLinks($config['platform_social_links'] ?? []);
 
         $dir = dirname($this->configPath);
         if (!is_dir($dir)) {
@@ -45,7 +46,38 @@ final readonly class AppConfigService
     /** @return list<string> */
     public function validate(array $data): array
     {
-        return $this->validateAgainstSchema($data, $this->defaults());
+        $errors = $this->validateAgainstSchema($data, $this->defaults());
+
+        if (isset($data['platform_social_links']) && is_array($data['platform_social_links'])) {
+            foreach ($data['platform_social_links'] as $network => $value) {
+                if (
+                    is_string($value)
+                    && '' !== trim($value)
+                    && 'whatsapp' !== $network
+                    && !str_starts_with(strtolower(trim($value)), 'https://')
+                ) {
+                    $errors[] = sprintf('platform_social_links.%s must use https://', $network);
+                }
+            }
+        }
+
+        return $errors;
+    }
+
+    /** @return array<string, mixed> */
+    public function publicConfig(): array
+    {
+        $config = $this->get();
+
+        return [
+            'platformName' => $config['platform_name'] ?? 'Hanooti',
+            'platformLogo' => $config['platform_logo'] ?? null,
+            'platformFavicon' => $config['platform_favicon'] ?? null,
+            'supportEmail' => $config['support_email'] ?? null,
+            'supportPhone' => $config['support_phone'] ?? null,
+            'supportAddress' => $config['support_address'] ?? null,
+            'socialLinks' => $config['platform_social_links'] ?? [],
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -58,6 +90,15 @@ final readonly class AppConfigService
             'support_email' => null,
             'support_phone' => null,
             'support_address' => null,
+            'platform_social_links' => [
+                'facebook' => '',
+                'instagram' => '',
+                'tiktok' => '',
+                'youtube' => '',
+                'linkedin' => '',
+                'x_twitter' => '',
+                'whatsapp' => '',
+            ],
             'timezone' => 'Africa/Tunis',
             'default_language' => 'fr',
             'default_currency' => 'TND',
@@ -170,6 +211,24 @@ final readonly class AppConfigService
         $data = json_decode($content ?: '', true);
 
         return is_array($data) ? $this->mergeConfig($this->defaults(), $data, $this->defaults()) : $this->defaults();
+    }
+
+    /** @param array<string, mixed> $links @return array<string, string> */
+    private function normalizeSocialLinks(array $links): array
+    {
+        $normalized = [];
+        foreach ($links as $network => $value) {
+            if (!is_string($value)) {
+                continue;
+            }
+
+            $value = trim($value);
+            if ('' !== $value) {
+                $normalized[(string) $network] = $value;
+            }
+        }
+
+        return $normalized;
     }
 
     /** @param array<string, mixed> $base @param array<string, mixed> $updates @param array<string, mixed> $schema @return array<string, mixed> */

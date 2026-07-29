@@ -1,14 +1,5 @@
-<!doctype html>
-<html lang="fr">
-<body style="margin:0;background:#f4f6f8;padding:24px;font-family:Arial,sans-serif;color:#172033">
-<div style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
-    <div style="padding:22px;background:#111827;color:#ffffff;text-align:center">
-        {% if logoUrl %}<img src="{{ logoUrl }}" alt="{{ boutique ? boutique.name : 'Hanooti' }}" style="max-height:54px;max-width:220px;object-fit:contain">{% endif %}
-        <div style="font-size:20px;font-weight:700;margin-top:8px">{{ boutique ? boutique.name : 'Hanooti' }}</div>
-    </div>
-    <div style="padding:28px;font-size:15px;line-height:1.6">
-        {{ message|nl2br }}
-    </div>
-</div>
-</body>
-</html>
+{% extends 'email/layout.html.twig' %}
+
+{% block content %}
+    <p>{{ message|nl2br }}</p>
+{% endblock %}

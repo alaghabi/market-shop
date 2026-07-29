@@ -6,6 +6,7 @@ import { Card, CardBody, CardHeader } from '../../components/Card';
 import { ErrorState, LoadingState } from '../../components/States';
 import { useApiClient, useApiData } from '../../hooks/useApi';
 import { useBoutique } from '../../hooks/useBoutique';
+import { useNotification } from '../../hooks/useNotification';
 import { PageHeader } from '../../layout/Shell';
 
 const gridStagger = {
@@ -83,6 +84,7 @@ type BoutiqueAccess = {
   permissions: string[];
   roles: string[];
 };
+type PublicationRequest = { id: string; status: string; requestedAt: string; reason?: string | null };
 
 type FeatureKey =
   | 'orders' | 'products' | 'inventory' | 'customers' | 'cart' | 'promotions' | 'coupons'
@@ -310,9 +312,11 @@ const FEATURES: FeatureDefinition[] = [
   },
 ];
 
-export function DashboardPage({ getAccessToken }: { getAccessToken: () => string | null }) {
+export function DashboardPage({ getAccessToken, userRoles = [] }: { getAccessToken: () => string | null; userRoles?: string[] }) {
   const api = useApiClient(getAccessToken);
   const { boutique } = useBoutique();
+  const { showNotice } = useNotification();
+  const canRequestPublication = userRoles.includes('ROLE_SUPER_ADMIN') || userRoles.includes('ROLE_BOUTIQUE_ADMIN');
 
   const fetchDashboard = useCallback(async () => {
     if (!boutique) {
@@ -330,8 +334,18 @@ export function DashboardPage({ getAccessToken }: { getAccessToken: () => string
       api.get<BoutiqueAccess>(`/admin/boutiques/${boutique.id}/dashboard/access`),
     ]);
 
-    return { mode: 'boutique' as const, dashboard, globalModules: globalModules.modules, access };
-  }, [api, boutique?.id]);
+      const publicationRequests = canRequestPublication
+        ? await api.getCollection<PublicationRequest>('/boutique/publication-requests')
+        : { member: [] };
+
+      return {
+        mode: 'boutique' as const,
+        dashboard,
+        globalModules: globalModules.modules,
+        access,
+        publicationRequest: publicationRequests.member.find((request) => request.status === 'pending') ?? null,
+      };
+  }, [api, boutique?.id, canRequestPublication]);
 
   const { data, isLoading, error, refresh } = useApiData(fetchDashboard, [boutique?.id]);
 
@@ -344,6 +358,7 @@ export function DashboardPage({ getAccessToken }: { getAccessToken: () => string
   if (!boutique) return <ErrorState message="Sélection boutique invalide." onRetry={refresh} />;
 
   const { dashboard, globalModules, access } = data;
+  const publicationRequest = data.publicationRequest;
   const permissions = new Set(access.permissions);
   const hasAdminRole = access.roles.includes('ROLE_SUPER_ADMIN') || access.roles.includes('ROLE_BOUTIQUE_ADMIN');
 
@@ -364,6 +379,15 @@ export function DashboardPage({ getAccessToken }: { getAccessToken: () => string
   const averageBasket = kpis.ordersToday > 0 ? kpis.salesTodayCents / kpis.ordersToday : null;
 
   const featureIsVisible = (key: FeatureKey) => visibleFeatures.some((feature) => feature.key === key);
+  const requestPublication = async () => {
+    try {
+      await api.post('/boutique/publication-requests', {});
+      showNotice('Votre demande sera traitée sous 24h.', 'success');
+      refresh();
+    } catch (requestError) {
+      showNotice(requestError instanceof Error ? requestError.message : 'Impossible d’envoyer la demande.', 'error');
+    }
+  };
   const mainCards = [
     { label: 'CA jour', value: money(kpis.salesTodayCents), visible: hasAdminRole && featureIsVisible('orders') },
     { label: 'CA mois', value: money(kpis.salesMonthCents), visible: hasAdminRole && featureIsVisible('orders') },
@@ -391,6 +415,26 @@ export function DashboardPage({ getAccessToken }: { getAccessToken: () => string
         description={`Pilotage de ${boutique.name} avec modules, abonnement et permissions appliqués.`}
         actions={<Button variant="secondary" onClick={refresh}>Actualiser</Button>}
       />
+
+      {canRequestPublication && !boutique.isPublished && (
+        <Card style={{ marginTop: 18, borderColor: 'var(--bo-primary)' }}>
+          <CardBody>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <strong>Boutique non publiée</strong>
+                <div style={{ color: 'var(--bo-text-muted)', fontSize: 13, marginTop: 4 }}>
+                  Demandez au Super Admin de publier votre boutique. Les demandes sont traitées sous 24h.
+                </div>
+              </div>
+              {publicationRequest ? (
+                <Badge tone="warning">Demande en cours de traitement</Badge>
+              ) : (
+                <Button variant="primary" onClick={() => void requestPublication()}>Demander la publication</Button>
+              )}
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       <motion.section
         className="bo-widget-grid"

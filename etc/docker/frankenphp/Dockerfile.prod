@@ -1,0 +1,52 @@
+FROM composer:2 AS php-vendor
+
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-progress \
+    --prefer-dist \
+    --no-scripts \
+    --ignore-platform-req=ext-redis \
+    --optimize-autoloader
+
+FROM node:22-alpine AS frontend
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY . .
+ARG MERCURE_PUBLIC_URL
+ENV MERCURE_PUBLIC_URL=$MERCURE_PUBLIC_URL
+ARG KEYCLOAK_PUBLIC_URL
+ARG KEYCLOAK_CLIENT_ID
+ENV KEYCLOAK_PUBLIC_URL=$KEYCLOAK_PUBLIC_URL
+ENV KEYCLOAK_CLIENT_ID=$KEYCLOAK_CLIENT_ID
+RUN npm run build
+
+FROM dunglas/frankenphp:1-php8.4-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache curl dcron git icu-dev libzip-dev postgresql-dev supervisor \
+    && install-php-extensions intl opcache pdo_pgsql redis zip \
+    && mkdir -p /app/var/cache /app/var/log /app/var/data /app/public/uploads
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY --from=php-vendor /app/vendor ./vendor
+COPY . .
+COPY --from=frontend /app/public/build ./public/build
+COPY etc/docker/frankenphp/Caddyfile.prod /etc/frankenphp/Caddyfile
+COPY etc/cron/market-shop /etc/crontabs/root
+COPY etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
+
+RUN chmod 0644 /etc/crontabs/root
+
+ENV APP_ENV=prod \
+    APP_DEBUG=0 \
+    APP_RUNTIME_OPTIONS='{"disable_dotenv":true}' \
+    APP_RUNTIME=Symfony\\Component\\Runtime\\SymfonyRuntime
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl --fail --silent --show-error --insecure https://localhost/api/health || exit 1

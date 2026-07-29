@@ -20,6 +20,19 @@ security:
             pattern: ^/api
             stateless: true
             provider: app_user_provider
+            access_token:
+                token_extractors:
+                    - App\Security\KeycloakTokenExtractor
+                token_handler:
+                    oidc:
+                        claim: email
+                        algorithms: ['RS256']
+                        audience: '%env(KEYCLOAK_AUDIENCE)%'
+                        issuers: ['%env(KEYCLOAK_ISSUER)%']
+                        discovery:
+                            base_uri: '%env(KEYCLOAK_DISCOVERY_BASE_URI)%'
+                            cache:
+                                id: cache.app
             custom_authenticators:
                 - App\Security\BearerTokenAuthenticator
             entry_point: App\Security\AuthenticationEntryPoint
@@ -35,6 +48,8 @@ security:
         - { path: ^/api/auth/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/auth/register-shop, roles: PUBLIC_ACCESS }
         - { path: ^/api/auth/password-reset, roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/verify-email, roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/resend-email-verification, roles: PUBLIC_ACCESS }
         - { path: ^/api/boutique/auth, roles: PUBLIC_ACCESS }
         - { path: ^/api/account, roles: ROLE_CUSTOMER }
         - { path: ^/api/boutiques$, roles: PUBLIC_ACCESS }
@@ -95,7 +110,9 @@ security:
         - { path: ^/api/favorites, roles: PUBLIC_ACCESS }
         - { path: ^/api/seo, roles: PUBLIC_ACCESS }
         - { path: ^/api/chat/upload, roles: PUBLIC_ACCESS }
+        - { path: ^/api/mercure/authorize, roles: PUBLIC_ACCESS }
         - { path: ^/api/frontend-bootstrap, roles: PUBLIC_ACCESS }
+        - { path: ^/api/public/app-config, roles: PUBLIC_ACCESS }
         - { path: ^/api/frontend-routes, roles: PUBLIC_ACCESS }
         - { path: ^/api/routes, roles: PUBLIC_ACCESS }
         - { path: ^/api/public, roles: PUBLIC_ACCESS }
@@ -104,6 +121,7 @@ security:
         - { path: ^/api/admin/subscription-plans, roles: ROLE_SUPER_ADMIN }
         - { path: ^/api/admin/boutiques, roles: ROLE_SUPER_ADMIN }
         - { path: ^/api/admin/subscription-requests, roles: ROLE_SUPER_ADMIN }
+        - { path: ^/api/admin/boutique-publication-requests, roles: ROLE_SUPER_ADMIN }
         - { path: ^/api/admin/platform-modules, roles: ROLE_SUPER_ADMIN }
         - { path: ^/api/admin/permissions, roles: ROLE_SUPER_ADMIN }
         - { path: ^/api/admin/subscription-modules, roles: ROLE_SUPER_ADMIN }
@@ -131,6 +149,7 @@ security:
         - { path: ^/api/admin/refunds, roles: ROLE_BOUTIQUE_ADMIN }
         - { path: ^/api/admin/coupons, roles: ROLE_BOUTIQUE_ADMIN }
         - { path: ^/api/admin/user-shops, roles: ROLE_BOUTIQUE_ADMIN }
+        - { path: ^/api/boutique/publication-requests, roles: ROLE_BOUTIQUE_ADMIN }
         - { path: ^/api/admin/users/[^/]+/(suspend|activate)$, roles: ROLE_BOUTIQUE_ADMIN }
         - { path: ^/api/boutique/subscription-plans, roles: ROLE_BOUTIQUE_ADMIN }
         - { path: ^/api/boutique/loyalty, roles: ROLE_BOUTIQUE_ADMIN }

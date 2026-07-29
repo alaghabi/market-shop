@@ -10,6 +10,7 @@ use App\Repository\BoutiqueRepository;
 use App\Repository\RolePermissionRepository;
 use App\Repository\UserRepository;
 use App\Security\BoutiqueContext;
+use App\Security\Permission\PermissionAccessService;
 use App\Service\Boutique\ShopContext;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,6 +26,7 @@ final readonly class SuggestionAccessService
         private ShopContext $shopContext,
         private BoutiqueRepository $boutiques,
         private UserRepository $users,
+        private ?PermissionAccessService $permissionAccess = null,
     ) {
     }
 
@@ -87,6 +89,10 @@ final readonly class SuggestionAccessService
 
     public function hasPermission(string $permission, ?Boutique $boutique = null): bool
     {
+        if ($this->permissionAccess instanceof PermissionAccessService) {
+            return $this->permissionAccess->isGranted($permission, $boutique);
+        }
+
         $user = $this->resolveUser();
         if (!$user instanceof User) {
             return false;

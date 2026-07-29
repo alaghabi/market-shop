@@ -1,0 +1,15 @@
+.env
+.env.*
+.git
+.gitignore
+.idea
+.vscode
+coverage
+node_modules
+vendor
+var/cache
+var/log
+test-results
+playwright-report
+docs/*.pdf
+secrets

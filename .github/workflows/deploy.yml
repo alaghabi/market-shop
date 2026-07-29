@@ -1,0 +1,118 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to OVH
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      OVH_HOST: ${{ secrets.OVH_HOST }}
+      OVH_USER: ${{ secrets.OVH_USER }}
+      OVH_APP_DIR: ${{ secrets.OVH_APP_DIR }}
+      OVH_KNOWN_HOSTS: ${{ secrets.OVH_KNOWN_HOSTS }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Checkout deployed revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Validate deployment secrets
+        run: |
+          test -n "$OVH_HOST"
+          test -n "$OVH_USER"
+          test -n "$OVH_APP_DIR"
+          test -n "$OVH_KNOWN_HOSTS"
+          test -n "$RELEASE_SHA"
+
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.OVH_SSH_PRIVATE_KEY }}
+
+      - name: Configure known hosts
+        run: |
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$OVH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0644 "$HOME/.ssh/known_hosts"
+
+      - name: Upload application revision
+        run: |
+          rsync -az --delete \
+            --exclude='.env.prod' \
+            --exclude='secrets/certs/' \
+            --exclude='var/data/' \
+            --exclude='var/cache/' \
+            --exclude='var/log/' \
+            --exclude='public/uploads/' \
+            --exclude='vendor/' \
+            --exclude='node_modules/' \
+            --exclude='.git/' \
+            -e 'ssh -o BatchMode=yes -o StrictHostKeyChecking=yes' \
+            ./ "$OVH_USER@$OVH_HOST:$OVH_APP_DIR/"
+
+      - name: Build and deploy on OVH
+        run: |
+          app_dir_q=$(printf '%q' "$OVH_APP_DIR")
+          release_sha_q=$(printf '%q' "$RELEASE_SHA")
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$OVH_USER@$OVH_HOST" \
+            "APP_DIR=$app_dir_q RELEASE_SHA=$release_sha_q bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+
+          cd "$APP_DIR"
+          test -f .env.prod
+          test -f secrets/certs/fullchain.pem
+          test -f secrets/certs/privkey.pem
+
+          export APP_VERSION="$RELEASE_SHA"
+          compose=(docker compose --env-file .env.prod -f docker-compose.prod.yml)
+
+          "${compose[@]}" build app supervisor
+          "${compose[@]}" up -d database redis mercure ollama
+
+          database_ready=0
+          for attempt in $(seq 1 30); do
+              if "${compose[@]}" exec -T database sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; then
+                  database_ready=1
+                  break
+              fi
+              sleep 2
+          done
+          test "$database_ready" = 1
+
+          mkdir -p backups
+          "${compose[@]}" exec -T database sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > "backups/hanooti-$RELEASE_SHA.sql.gz"
+
+          "${compose[@]}" run --rm --no-deps app php bin/console doctrine:migrations:migrate --no-interaction --env=prod
+          "${compose[@]}" run --rm --no-deps app php bin/console cache:clear --env=prod --no-debug
+          "${compose[@]}" up -d app supervisor
+
+          application_ready=0
+          for attempt in $(seq 1 30); do
+              if curl --fail --silent --show-error https://hanooti.shop/api/health >/dev/null; then
+                  application_ready=1
+                  break
+              fi
+              sleep 5
+          done
+          test "$application_ready" = 1
+          REMOTE

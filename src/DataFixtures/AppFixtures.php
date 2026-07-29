@@ -234,7 +234,7 @@ final class AppFixtures extends Fixture
             isFree: false,
             isVisible: true,
             isActive: true,
-            modules: ['reviews', 'wishlist', 'loyalty', 'coupons', 'promotions', 'blog', 'brands', 'chatbot', 'analytics'],
+            modules: ['reviews', 'wishlist', 'customer_auth', 'loyalty', 'coupons', 'promotions', 'blog', 'brands', 'chatbot', 'analytics'],
             chatbotModel: 'llama3.2:1b',
         );
         $manager->persist($plan);
@@ -311,6 +311,7 @@ final class AppFixtures extends Fixture
         $user->setLastname($lastName);
         $user->setPhone($this->faker->phoneNumber());
         $user->setStatus(UserStatus::Active);
+        $user->markEmailVerified();
         $user->setPassword('password123');
         $manager->persist($user);
 

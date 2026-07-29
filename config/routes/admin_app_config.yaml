@@ -6,4 +6,4 @@ admin_app_config_get:
 admin_app_config_update:
     path: /api/admin/app-config
     controller: App\Controller\Admin\AppConfigController::updateConfig
-    methods: [POST]
+    methods: [POST, PATCH]

@@ -45,6 +45,7 @@ final class BoutiqueOutput
     public bool $viewsEnabled = false;
     public bool $customerAccountsEnabled = true;
     public bool $chatbotEnabled = false;
+    public string $chatbotMode = 'MANUAL';
     public int $customersWithAccount = 0;
     public int $customersWithoutAccount = 0;
     public int $publicOrdersCount = 0;

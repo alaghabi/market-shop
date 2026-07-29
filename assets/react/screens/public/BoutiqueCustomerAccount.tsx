@@ -1,8 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, LogOut, LockKeyhole, Mail, UserRound } from 'lucide-react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { boutiqueLink, boutiqueQuery, resolveBoutiqueSlug } from './boutiqueRouting';
 import { ImageWithFallback } from '../../components/ImageWithFallback';
 import { applyStorefrontTheme, resetStorefrontTheme, type StorefrontThemeData } from '../../theme/storefrontThemeRoot';
+import { initializeKeycloakForLogin, loginWithIdentityProvider, getKeycloakAccessToken } from '../../auth/keycloakClient';
+import { SOCIAL_PROVIDERS, type SocialProvider } from '../../auth/socialProviders';
+import { appIcons } from '../../icons/fontAwesome';
 
 type CustomerProfile = {
   id: string;
@@ -16,12 +20,14 @@ type CustomerProfile = {
 type CustomerSession = {
   accessToken: string;
   customer: CustomerProfile;
+  authType?: 'local' | 'keycloak';
 };
 
 type CustomerBoutique = StorefrontThemeData & {
   id: string;
   name: string;
   slug: string;
+  customerAccountsEnabled?: boolean;
 };
 
 const sessionPrefix = 'hanooti.customer.';
@@ -104,8 +110,12 @@ export function BoutiqueCustomerAuthPage({ mode }: { mode: 'login' | 'register' 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
+  const [customerAccountsEnabled, setCustomerAccountsEnabled] = useState<boolean | null>(null);
+  const [socialLoginEnabled, setSocialLoginEnabled] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSocialSubmitting, setIsSocialSubmitting] = useState(false);
 
   useEffect(() => {
     if (!boutiqueSlug) return;
@@ -114,18 +124,59 @@ export function BoutiqueCustomerAuthPage({ mode }: { mode: 'login' | 'register' 
     fetch(`/api/boutiques/${boutiqueSlug}`)
       .then((response) => response.ok ? response.json() : null)
       .then((payload: CustomerBoutique | null) => {
-        if (!payload) return;
-        applyStorefrontTheme(payload);
-        setBoutique(payload);
-      })
-      .catch(() => {});
+         if (!payload) {
+           setCustomerAccountsEnabled(false);
+
+           return;
+         }
+          setCustomerAccountsEnabled(payload.customerAccountsEnabled === true);
+         applyStorefrontTheme(payload);
+         setBoutique(payload);
+       })
+      .catch(() => setCustomerAccountsEnabled(false));
+
+    fetch(`/api/boutique/auth/social/status${boutiqueQuery(boutiqueSlug)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { enabled: boolean } | null) => setSocialLoginEnabled(data?.enabled === true))
+      .catch(() => setSocialLoginEnabled(false));
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('code') || urlParams.has('session_state')) {
+      initializeKeycloakForLogin().then((authenticated) => {
+        if (!authenticated) return;
+        const kcToken = getKeycloakAccessToken();
+        if (!kcToken) return;
+        return fetch(`/api/boutique/auth/social${boutiqueQuery(boutiqueSlug)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${kcToken}` },
+        });
+      }).then(async (response) => {
+        if (!response || !response.ok) return;
+        const data = await response.json() as { customer: CustomerProfile };
+        if (!data.customer) return;
+        const kcToken = getKeycloakAccessToken();
+        if (kcToken) {
+          saveSession(boutiqueSlug, { accessToken: kcToken, customer: data.customer, authType: 'keycloak' });
+          window.location.href = boutiqueLink('/client/account');
+        }
+      }).catch(() => {});
+    }
 
     return resetStorefrontTheme;
   }, [boutiqueSlug]);
 
+  if (false === customerAccountsEnabled) {
+    return <main className="flex min-h-screen items-center justify-center bg-[color:var(--sf-bg,#f6f2eb)] px-6 text-center">Les comptes clients ne sont pas disponibles pour cette boutique.</main>;
+  }
+
+  if (null === customerAccountsEnabled) {
+    return <main className="flex min-h-screen items-center justify-center bg-[color:var(--sf-bg,#f6f2eb)]">Chargement...</main>;
+  }
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    setSuccessMessage(null);
     setIsSubmitting(true);
 
     try {
@@ -138,8 +189,18 @@ export function BoutiqueCustomerAuthPage({ mode }: { mode: 'login' | 'register' 
         credentials: 'same-origin',
         body: JSON.stringify(payload),
       });
-      const result = await response.json().catch(() => ({})) as { accessToken?: string; customer?: CustomerProfile; message?: string };
-      if (!response.ok || !result.accessToken || !result.customer) {
+      const result = await response.json().catch(() => ({})) as { accessToken?: string; customer?: CustomerProfile; message?: string; verificationRequired?: boolean };
+      if (!response.ok) {
+        throw new Error(result.message ?? 'Authentification client impossible.');
+      }
+
+      if ('register' === mode && result.verificationRequired) {
+        setSuccessMessage(result.message ?? 'Vérifiez votre email pour activer votre compte.');
+
+        return;
+      }
+
+      if (!result.accessToken || !result.customer) {
         throw new Error(result.message ?? 'Authentification client impossible.');
       }
 
@@ -154,6 +215,15 @@ export function BoutiqueCustomerAuthPage({ mode }: { mode: 'login' | 'register' 
 
   const isRegister = mode === 'register';
   const alternatePath = isRegister ? '/client/login' : '/client/register';
+
+  const startSocialLogin = (provider: SocialProvider) => {
+    setError(null);
+    setIsSocialSubmitting(true);
+    void loginWithIdentityProvider(provider).catch((exception: unknown) => {
+      setIsSocialSubmitting(false);
+      setError(exception instanceof Error ? exception.message : 'Authentification sociale impossible.');
+    });
+  };
 
   return (
     <main className="min-h-screen bg-[color:var(--sf-bg,#f6f2eb)] px-4 py-8 text-[color:var(--sf-text,#171717)] sm:px-6 lg:px-8">
@@ -174,12 +244,19 @@ export function BoutiqueCustomerAuthPage({ mode }: { mode: 'login' | 'register' 
             <form className="mt-8 grid gap-4" onSubmit={submit}>
               {isRegister && <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">Prénom<input required value={firstName} onChange={(event) => setFirstName(event.target.value)} className="mt-2 w-full rounded-xl border border-[color:var(--sf-outline,#d8d0c4)] px-4 py-3 font-normal outline-none focus:ring-2 focus:ring-[color:var(--sf-accent,#22C55E)]" /></label><label className="text-sm font-semibold">Nom<input required value={lastName} onChange={(event) => setLastName(event.target.value)} className="mt-2 w-full rounded-xl border border-[color:var(--sf-outline,#d8d0c4)] px-4 py-3 font-normal outline-none focus:ring-2 focus:ring-[color:var(--sf-accent,#22C55E)]" /></label></div>}
               <label className="text-sm font-semibold"><span className="inline-flex items-center gap-2"> <Mail className="h-4 w-4" aria-hidden="true" /> Email</span><input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 w-full rounded-xl border border-[color:var(--sf-outline,#d8d0c4)] px-4 py-3 font-normal outline-none focus:ring-2 focus:ring-[color:var(--sf-accent,#22C55E)]" /></label>
-              {isRegister && <label className="text-sm font-semibold">Téléphone<input value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-2 w-full rounded-xl border border-[color:var(--sf-outline,#d8d0c4)] px-4 py-3 font-normal outline-none focus:ring-2 focus:ring-[color:var(--sf-accent,#22C55E)]" /></label>}
-               <label className="text-sm font-semibold"><span className="inline-flex items-center gap-2"><LockKeyhole className="h-4 w-4" aria-hidden="true" /> Mot de passe</span><input required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 w-full rounded-xl border border-[color:var(--sf-outline,#d8d0c4)] px-4 py-3 font-normal outline-none focus:ring-2 focus:ring-[color:var(--sf-accent,#22C55E)]" /></label>
-               {!isRegister && <a href={boutiqueLink('/client/forgot-password')} className="text-right text-sm font-bold text-[color:var(--sf-accent,#7C3AED)] hover:underline">Mot de passe oublié ?</a>}
-              {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
-              <button type="submit" disabled={isSubmitting} className="mt-2 inline-flex min-h-12 cursor-pointer items-center justify-center rounded-full bg-[color:var(--sf-accent,#111111)] px-6 py-3 text-sm font-black text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">{isSubmitting ? 'Chargement...' : isRegister ? 'Créer mon compte' : 'Se connecter'}</button>
-            </form>
+               {isRegister && <label className="text-sm font-semibold">Téléphone<input value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-2 w-full rounded-xl border border-[color:var(--sf-outline,#d8d0c4)] px-4 py-3 font-normal outline-none focus:ring-2 focus:ring-[color:var(--sf-accent,#22C55E)]" /></label>}
+                <label className="text-sm font-semibold"><span className="inline-flex items-center gap-2"><LockKeyhole className="h-4 w-4" aria-hidden="true" /> Mot de passe</span><input required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 w-full rounded-xl border border-[color:var(--sf-outline,#d8d0c4)] px-4 py-3 font-normal outline-none focus:ring-2 focus:ring-[color:var(--sf-accent,#22C55E)]" /></label>
+                {!isRegister && <a href={boutiqueLink('/client/forgot-password')} className="text-right text-sm font-bold text-[color:var(--sf-accent,#7C3AED)] hover:underline">Mot de passe oublié ?</a>}
+               {successMessage && <p role="status" className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{successMessage}</p>}
+               {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
+               <button type="submit" disabled={isSubmitting} className="mt-2 inline-flex min-h-12 cursor-pointer items-center justify-center rounded-full bg-[color:var(--sf-accent,#111111)] px-6 py-3 text-sm font-black text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">{isSubmitting ? 'Chargement...' : isRegister ? 'Créer mon compte' : 'Se connecter'}</button>
+               {socialLoginEnabled === true && !isRegister && <div className="grid gap-3 border-t border-[color:var(--sf-outline,#d8d0c4)] pt-5">
+                  <p className="text-center text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--sf-text-muted,#6b6560)]">Ou continuer avec</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {SOCIAL_PROVIDERS.map((provider) => <button key={provider.id} type="button" disabled={isSocialSubmitting} onClick={() => startSocialLogin(provider.id)} className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-full border border-[color:var(--sf-outline,#d8d0c4)] transition-colors hover:bg-[color:var(--sf-surface-muted,#ece5d9)] disabled:cursor-not-allowed disabled:opacity-60" aria-label={`Continuer avec ${provider.label}`}><FontAwesomeIcon icon={appIcons[provider.icon as keyof typeof appIcons]} className="h-5 w-5" /></button>)}
+                  </div>
+                </div>}
+             </form>
             <p className="mt-6 text-center text-sm text-[color:var(--sf-text-muted,#6b6560)]">{isRegister ? 'Vous avez déjà un compte ?' : 'Nouveau dans cette boutique ?'} <a href={boutiqueLink(alternatePath)} className="font-bold text-[color:var(--sf-accent,#7C3AED)] hover:underline">{isRegister ? 'Se connecter' : 'Créer un compte'}</a></p>
           </div>
         </div>
@@ -191,6 +268,7 @@ export function BoutiqueCustomerAuthPage({ mode }: { mode: 'login' | 'register' 
 export function BoutiqueCustomerAccountPage() {
   const boutiqueSlug = resolveBoutiqueSlug(/^\/boutiques\/([^/]+)\/client\/account/);
   const [session, setSession] = useState<CustomerSession | null>(() => readSession(boutiqueSlug));
+  const [customerAccountsEnabled, setCustomerAccountsEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!boutiqueSlug) return;
@@ -199,9 +277,14 @@ export function BoutiqueCustomerAccountPage() {
     fetch(`/api/boutiques/${boutiqueSlug}`)
       .then((response) => response.ok ? response.json() : null)
       .then((payload: CustomerBoutique | null) => {
-        if (payload) applyStorefrontTheme(payload);
+        if (payload) {
+          setCustomerAccountsEnabled(payload.customerAccountsEnabled === true);
+          applyStorefrontTheme(payload);
+        } else {
+          setCustomerAccountsEnabled(false);
+        }
       })
-      .catch(() => {});
+      .catch(() => setCustomerAccountsEnabled(false));
 
     return resetStorefrontTheme;
   }, [boutiqueSlug]);
@@ -231,6 +314,14 @@ export function BoutiqueCustomerAccountPage() {
         setSession(null);
       });
   }, [boutiqueSlug]);
+
+  if (false === customerAccountsEnabled) {
+    return <main className="flex min-h-screen items-center justify-center bg-[color:var(--sf-bg,#f6f2eb)] px-6 text-center">Les comptes clients ne sont pas disponibles pour cette boutique.</main>;
+  }
+
+  if (null === customerAccountsEnabled) {
+    return <main className="flex min-h-screen items-center justify-center bg-[color:var(--sf-bg,#f6f2eb)]">Chargement...</main>;
+  }
 
   if (!session) {
     return <main className="flex min-h-screen items-center justify-center bg-[color:var(--sf-bg,#f6f2eb)]">Redirection vers la connexion...</main>;

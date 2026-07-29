@@ -3,6 +3,9 @@
 namespace App\Tests\Functional\Api;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
+use App\Entity\RolePermission;
+use App\Repository\RolePermissionRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
@@ -139,6 +142,8 @@ final class CatalogCrudApiTest extends ApiTestCase
 
     private function loginAsBoutiqueAdmin(): string
     {
+        $this->ensureCatalogPermissions();
+
         $response = static::createClient()->request('POST', '/api/auth/login', [
             'headers' => ['Host' => self::SHOP_HOST],
             'json' => [
@@ -152,6 +157,21 @@ final class CatalogCrudApiTest extends ApiTestCase
         self::assertArrayHasKey('accessToken', $payload);
 
         return $payload['accessToken'];
+    }
+
+    private function ensureCatalogPermissions(): void
+    {
+        $container = static::getContainer();
+        $repository = $container->get(RolePermissionRepository::class);
+        $entityManager = $container->get(EntityManagerInterface::class);
+
+        foreach (['product.create', 'product.update', 'product.delete', 'product.category.manage'] as $permission) {
+            if (null === $repository->findOneBy(['roleCode' => 'ROLE_BOUTIQUE_ADMIN', 'permission' => $permission])) {
+                $entityManager->persist(new RolePermission('ROLE_BOUTIQUE_ADMIN', $permission));
+            }
+        }
+
+        $entityManager->flush();
     }
 
     /** @param array<string, string> $headers */

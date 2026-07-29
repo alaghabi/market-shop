@@ -6,8 +6,6 @@ type ApiResponse<T> = {
   'hydra:totalItems'?: number;
 } & T;
 
-const storageKey = 'market-shop.auth';
-
 export class ApiClient {
   private baseUrl: string;
 
@@ -41,7 +39,6 @@ export class ApiClient {
     });
 
     if (response.status === 401) {
-      window.localStorage.removeItem(storageKey);
       window.location.assign('/auth/login');
       throw new Error('Session expirée. Veuillez vous reconnecter.');
     }
@@ -93,7 +90,6 @@ export class ApiClient {
     });
 
     if (response.status === 401) {
-      window.localStorage.removeItem(storageKey);
       window.location.assign('/auth/login');
       throw new Error('Session expirée. Veuillez vous reconnecter.');
     }

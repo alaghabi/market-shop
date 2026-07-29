@@ -9,6 +9,7 @@ export function notificationLink(
 ): string {
   const type = notification.type.toLowerCase();
 
+  if (isSuperAdmin && type.includes("publication")) return "/admin/boutiques";
   if (
     isSuperAdmin &&
     notification.boutiqueId &&

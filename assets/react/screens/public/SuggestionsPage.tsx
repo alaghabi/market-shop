@@ -8,7 +8,6 @@ import { SuggestionStatusBadge } from '../../backoffice/components/suggestions/S
 import { SUGGESTION_STATUS_OPTIONS, type Suggestion, type SuggestionCategory } from '../../backoffice/components/suggestions/SuggestionTypes';
 import { Button, Card, Input, Select, Textarea } from '../../components/ui';
 import { authHeaders, resolveBoutiqueSlug } from './boutiqueRouting';
-import { getStoredAccessToken } from '../../auth/getStoredAccessToken';
 import { useAuth } from '../../auth/useAuth';
 import { PublicHeader } from '../../components/PublicHeader';
 
@@ -37,7 +36,7 @@ export function SuggestionsPage() {
   const { user, signOut } = useAuth();
   const boutiqueSlug = resolveBoutiqueSlug(/^\/boutiques\/([^/]+)/) || new URLSearchParams(window.location.search).get('boutique') || '';
   const boutiqueQuery = boutiqueSlug ? `?boutiqueSlug=${encodeURIComponent(boutiqueSlug)}` : '';
-  const canInteract = Boolean(getStoredAccessToken());
+  const canInteract = Boolean(authHeaders());
   const roles = user?.profile.roles ?? [];
   const canAccessBackOffice = roles.includes('ROLE_BOUTIQUE_ADMIN') || roles.includes('ROLE_SUPER_ADMIN');
   const canCreate = canAccessBackOffice;

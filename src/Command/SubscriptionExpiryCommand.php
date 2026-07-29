@@ -8,6 +8,7 @@ use App\Repository\BoutiqueExtensionRepository;
 use App\Repository\SubscriptionRepository;
 use App\Repository\UserRepository;
 use App\Service\Subscription\SubscriptionQuotaReconciler;
+use App\Service\Notification\BackofficeNotificationService;
 use App\State\Subscription\SubscriptionExtensionReconciler;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -27,6 +28,7 @@ final class SubscriptionExpiryCommand extends Command
         private readonly BoutiqueExtensionRepository $boutiqueExtensions,
         private readonly SubscriptionExtensionReconciler $extensionReconciler,
         private readonly SubscriptionQuotaReconciler $quotaReconciler,
+        private readonly BackofficeNotificationService $backofficeNotifications,
         private readonly EntityManagerInterface $em,
     ) {
         parent::__construct();
@@ -81,7 +83,13 @@ final class SubscriptionExpiryCommand extends Command
                 $messageEnd,
             );
 
-            $this->createNotificationForBoutiqueAdmins($subscription, 'subscription_expired', $message);
+            $this->backofficeNotifications->notifyBoutiqueAdmins(
+                $boutique,
+                'subscription_expired',
+                'Abonnement expiré',
+                $message,
+                'subscription.expired',
+            );
             $this->createNotificationForSuperAdmins($subscription, 'subscription_expired', $message);
             $subscription->markAsExpired();
             $deactivated = $this->extensionReconciler->deactivateAllActiveGrants($boutique);

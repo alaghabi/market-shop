@@ -1,10 +1,7 @@
 declare namespace NodeJS {
   interface ProcessEnv {
-    OAUTH2_AUTHORITY?: string;
-    OAUTH2_CLIENT_ID?: string;
-    OAUTH2_REDIRECT_URI?: string;
-    OAUTH2_POST_LOGOUT_REDIRECT_URI?: string;
-    OAUTH2_SCOPE?: string;
+    KEYCLOAK_PUBLIC_URL?: string;
+    KEYCLOAK_CLIENT_ID?: string;
   }
 }
 

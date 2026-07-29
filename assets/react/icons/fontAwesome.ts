@@ -1,4 +1,4 @@
-import { library } from '@fortawesome/fontawesome-svg-core';
+import { library, type IconProp } from '@fortawesome/fontawesome-svg-core';
 import {
   faArrowRight,
   faArrowRightToBracket,
@@ -31,7 +31,7 @@ import {
   faEye,
   faEyeSlash,
 } from '@fortawesome/free-solid-svg-icons';
-import { faFacebook, faInstagram, faLinkedin, faXTwitter } from '@fortawesome/free-brands-svg-icons';
+import { faFacebook, faGoogle, faInstagram, faLinkedin, faMicrosoft, faTiktok, faWhatsapp, faXTwitter, faYoutube } from '@fortawesome/free-brands-svg-icons';
 
 library.add(
   faArrowRight,
@@ -42,6 +42,7 @@ library.add(
   faChartLine,
   faCircleCheck,
   faFacebook,
+  faGoogle,
   faEnvelope,
   faGift,
   faHeadphonesSimple,
@@ -50,6 +51,7 @@ library.add(
   faInstagram,
   faLinkedin,
   faLightbulb,
+  faMicrosoft,
   faLock,
   faPalette,
   faPenToSquare,
@@ -68,6 +70,9 @@ library.add(
   faEye,
   faEyeSlash,
   faXTwitter,
+  faTiktok,
+  faWhatsapp,
+  faYoutube,
 );
 
 export const appIcons = {
@@ -105,4 +110,6 @@ export const appIcons = {
   lightbulb: 'lightbulb',
   utensils: 'utensils',
   facebook: 'facebook',
+  google: ['fab', 'google'] as IconProp,
+  microsoft: ['fab', 'microsoft'] as IconProp,
 } as const;

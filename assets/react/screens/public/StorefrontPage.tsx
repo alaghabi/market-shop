@@ -49,6 +49,7 @@ type StorefrontBoutiqueResponse = {
   viewsEnabled?: boolean;
   customerAccountsEnabled?: boolean;
   chatbotEnabled?: boolean;
+  chatbotMode?: 'MANUAL' | 'AI';
   customersWithAccount?: number;
   customersWithoutAccount?: number;
   publicOrdersCount?: number;
@@ -218,8 +219,9 @@ export function StorefrontPage({ title, description }: { title: string; descript
             wishlistEnabled: data.wishlistEnabled === true,
             analyticsEnabled: data.analyticsEnabled === true,
             viewsEnabled: data.viewsEnabled === true,
-            customerAccountsEnabled: data.customerAccountsEnabled !== false,
-            chatbotEnabled: data.chatbotEnabled === true,
+              customerAccountsEnabled: data.customerAccountsEnabled === true,
+             chatbotEnabled: data.chatbotEnabled === true,
+             chatbotMode: data.chatbotMode === 'AI' ? 'AI' : 'MANUAL',
            customersWithAccount: data.customersWithAccount ?? 0,
            customersWithoutAccount: data.customersWithoutAccount ?? 0,
             publicOrdersCount: data.publicOrdersCount ?? 0,
