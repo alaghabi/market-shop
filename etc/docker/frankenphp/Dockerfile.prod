@@ -40,13 +40,18 @@ COPY --from=frontend /app/public/build ./public/build
 COPY etc/docker/frankenphp/Caddyfile.prod /etc/frankenphp/Caddyfile
 COPY etc/cron/market-shop /etc/crontabs/root
 COPY etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
+COPY etc/docker/frankenphp/docker-entrypoint.sh /usr/local/bin/market-shop-entrypoint
 
-RUN chmod 0644 /etc/crontabs/root
+RUN chmod 0644 /etc/crontabs/root \
+    && chmod +x /usr/local/bin/market-shop-entrypoint
 
 ENV APP_ENV=prod \
     APP_DEBUG=0 \
     APP_RUNTIME_OPTIONS='{"disable_dotenv":true}' \
     APP_RUNTIME=Symfony\\Component\\Runtime\\SymfonyRuntime
+
+ENTRYPOINT ["/usr/local/bin/market-shop-entrypoint"]
+CMD ["--config", "/etc/frankenphp/Caddyfile", "--adapter", "caddyfile"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl --fail --silent --show-error --insecure https://localhost/api/health || exit 1

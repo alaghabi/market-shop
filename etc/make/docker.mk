@@ -1,4 +1,20 @@
-.PHONY: start start-up stop restart
+.PHONY: start start-up stop restart prod-build prod-up prod-ps prod-logs
+PROD_COMPOSE := docker compose --env-file .env.prod -f docker-compose.prod.yml
+
+prod-build: ## Build VPS/production image from Dockerfile.prod
+	$(PROD_COMPOSE) build app supervisor
+
+prod-up: ## Start VPS/production stack (Dockerfile.prod)
+	$(PROD_COMPOSE) up -d
+	$(PROD_COMPOSE) run --rm --no-deps app php bin/console doctrine:migrations:migrate --no-interaction --env=prod
+	$(PROD_COMPOSE) run --rm --no-deps app php bin/console cache:clear --env=prod --no-debug
+
+prod-ps: ## Show production stack status
+	$(PROD_COMPOSE) ps
+
+prod-logs: ## Tail production app + supervisor logs
+	$(PROD_COMPOSE) logs --tail=100 -f app supervisor
+
 start: ## Start local stack + run migrations
 	docker compose up -d
 	@table_count=$$(docker compose exec -T database psql -U app -d app -tAc "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'doctrine_migration_versions';"); \

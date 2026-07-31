@@ -36,7 +36,6 @@ services:
     build:
       context: .
       dockerfile: etc/docker/frankenphp/Dockerfile
-    entrypoint: ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
     restart: unless-stopped
     healthcheck:
       disable: true
@@ -45,6 +44,7 @@ services:
     working_dir: /app
     environment:
       APP_RUNTIME: Symfony\Component\Runtime\SymfonyRuntime
+      CONTAINER_ROLE: supervisor
     depends_on:
       - database
       - redis

@@ -33,6 +33,8 @@ services:
         condition: service_healthy
       mercure:
         condition: service_healthy
+      supervisor:
+        condition: service_started
     restart: unless-stopped
     mem_limit: 1536m
     cpus: 1.5
@@ -42,13 +44,22 @@ services:
 
   supervisor:
     image: market-shop-app:${APP_VERSION:-production}
+    build:
+      context: .
+      dockerfile: etc/docker/frankenphp/Dockerfile.prod
+      args:
+        MERCURE_PUBLIC_URL: ${MERCURE_PUBLIC_URL:?MERCURE_PUBLIC_URL must be set}
+        KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-https://auth.hanooti.shop}
+        KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-hanooti-web}
     env_file:
       - ${PROD_ENV_FILE:-.env.prod}
     environment:
       APP_ENV: prod
       APP_DEBUG: "0"
       APP_RUNTIME: Symfony\Component\Runtime\SymfonyRuntime
-    entrypoint: ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+      CONTAINER_ROLE: supervisor
+    healthcheck:
+      disable: true
     volumes:
       - uploads_data:/app/public/uploads
       - app_data:/app/var/data

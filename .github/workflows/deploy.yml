@@ -17,12 +17,12 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy to OVH
+    name: Build and deploy on OVH (SSH)
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     environment: production
     env:
       OVH_HOST: ${{ secrets.OVH_HOST }}
@@ -43,6 +43,7 @@ jobs:
           test -n "$OVH_APP_DIR"
           test -n "$OVH_KNOWN_HOSTS"
           test -n "$RELEASE_SHA"
+          test -n "${{ secrets.OVH_SSH_PRIVATE_KEY }}"
 
       - name: Configure SSH
         uses: webfactory/ssh-agent@v0.9.0
@@ -55,7 +56,7 @@ jobs:
           printf '%s\n' "$OVH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 0644 "$HOME/.ssh/known_hosts"
 
-      - name: Upload application revision
+      - name: Upload application revision over SSH
         run: |
           rsync -az --delete \
             --exclude='.env.prod' \
@@ -70,7 +71,7 @@ jobs:
             -e 'ssh -o BatchMode=yes -o StrictHostKeyChecking=yes' \
             ./ "$OVH_USER@$OVH_HOST:$OVH_APP_DIR/"
 
-      - name: Build and deploy on OVH
+      - name: Build with Dockerfile.prod and deploy over SSH
         run: |
           app_dir_q=$(printf '%q' "$OVH_APP_DIR")
           release_sha_q=$(printf '%q' "$RELEASE_SHA")
@@ -86,8 +87,10 @@ jobs:
           export APP_VERSION="$RELEASE_SHA"
           compose=(docker compose --env-file .env.prod -f docker-compose.prod.yml)
 
-          "${compose[@]}" build app supervisor
-          "${compose[@]}" up -d database redis mercure ollama
+          # Build production image on the VPS (Dockerfile.prod)
+          make install-prod
+
+          "${compose[@]}" up -d database redis mercure keycloak ollama
 
           database_ready=0
           for attempt in $(seq 1 30); do
@@ -104,7 +107,7 @@ jobs:
 
           "${compose[@]}" run --rm --no-deps app php bin/console doctrine:migrations:migrate --no-interaction --env=prod
           "${compose[@]}" run --rm --no-deps app php bin/console cache:clear --env=prod --no-debug
-          "${compose[@]}" up -d app supervisor
+          "${compose[@]}" up -d supervisor app
 
           application_ready=0
           for attempt in $(seq 1 30); do
@@ -115,4 +118,14 @@ jobs:
               sleep 5
           done
           test "$application_ready" = 1
+
+          supervisor_ready=0
+          for attempt in $(seq 1 15); do
+              if "${compose[@]}" exec -T supervisor sh -c 'supervisorctl -c /etc/supervisor/supervisord.conf status cron | grep -q RUNNING'; then
+                  supervisor_ready=1
+                  break
+              fi
+              sleep 2
+          done
+          test "$supervisor_ready" = 1
           REMOTE

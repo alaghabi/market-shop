@@ -105,11 +105,16 @@ produite par `openssl rand -hex 32` convient.
 
 ## 4. Construire et démarrer
 
+L'image production est construite avec `etc/docker/frankenphp/Dockerfile.prod`
+(multi-stage: Composer, Node build, FrankenPHP). Le service `supervisor`
+démarre automatiquement cron + workers via `CONTAINER_ROLE=supervisor`.
+
 ```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml build
-docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
-docker compose --env-file .env.prod -f docker-compose.prod.yml exec app \
-  php bin/console cache:clear --env=prod --no-debug
+make prod-build
+make prod-up
+# équivalent:
+# docker compose --env-file .env.prod -f docker-compose.prod.yml build app supervisor
+# docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
 ```
 
 Sur une base PostgreSQL déjà existante, créer le schéma Keycloak une seule fois
