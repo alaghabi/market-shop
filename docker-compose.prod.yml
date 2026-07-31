@@ -35,6 +35,16 @@ services:
         condition: service_healthy
       supervisor:
         condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl --fail --silent --show-error --insecure --resolve hanooti.shop:443:127.0.0.1 https://hanooti.shop/api/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     restart: unless-stopped
     mem_limit: 1536m
     cpus: 1.5
@@ -82,6 +92,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     volumes:
       - database_data:/var/lib/postgresql/data
+      - ./etc/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -95,7 +106,8 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.3.2
-    command: start --optimized
+    # Do not use --optimized on first boot; after a successful start you can switch back.
+    command: start
     env_file:
       - ${PROD_ENV_FILE:-.env.prod}
     environment:
@@ -112,11 +124,16 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-keycloak-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-keycloak-admin}
     healthcheck:
-      test: ["CMD-SHELL", "curl --fail --silent http://localhost:9000/health/ready || exit 1"]
+      # Official Keycloak image has no curl; probe management port with bash /dev/tcp.
+      test:
+        [
+          "CMD-SHELL",
+          "exec 3<>/dev/tcp/127.0.0.1/9000; echo -e 'HEAD /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; cat <&3 | grep -q '200'",
+        ]
       interval: 15s
       timeout: 5s
-      retries: 10
-      start_period: 45s
+      retries: 20
+      start_period: 120s
     depends_on:
       database:
         condition: service_healthy
@@ -164,7 +181,8 @@ services:
       MERCURE_EXTRA_DIRECTIVES: |
         cors_origins https://hanooti.shop https://*.hanooti.shop
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://localhost/healthz"]
+      # dunglas/mercure image has no curl; use wget from the Caddy base.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -187,7 +205,14 @@ services:
       OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
       OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
       OLLAMA_MAX_QUEUE: ${OLLAMA_MAX_QUEUE:-2}
-    command: ["/bin/sh", "-c", "ollama serve & pid=$$!; until ollama list >/dev/null 2>&1; do sleep 2; done; ollama pull \"$${OLLAMA_MODEL}\"; wait $$pid"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        pid=$$!
+        until ollama list >/dev/null 2>&1; do sleep 2; done
+        ollama pull "$${OLLAMA_MODEL}"
+        wait $$pid
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:

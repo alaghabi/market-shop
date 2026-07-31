@@ -54,4 +54,4 @@ ENTRYPOINT ["/usr/local/bin/market-shop-entrypoint"]
 CMD ["--config", "/etc/frankenphp/Caddyfile", "--adapter", "caddyfile"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD curl --fail --silent --show-error --insecure https://localhost/api/health || exit 1
+    CMD curl --fail --silent --show-error --insecure --resolve hanooti.shop:443:127.0.0.1 https://hanooti.shop/api/health || exit 1
