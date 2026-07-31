@@ -3,6 +3,7 @@
 namespace App\Controller\Rest\Admin;
 
 use App\Repository\BoutiqueRepository;
+use App\Repository\UserRepository;
 use App\Security\BoutiqueContext;
 use App\Security\Permission\PermissionAccessService;
 use App\Service\Dashboard\DashboardService;
@@ -25,6 +26,7 @@ final class DashboardController extends AbstractController
         private ModuleAccessService $moduleAccess,
         private PermissionAccessService $permissionAccess,
         private Security $security,
+        private UserRepository $users,
     ) {
     }
 
@@ -90,11 +92,20 @@ final class DashboardController extends AbstractController
 
         $roles = method_exists($this->security->getUser(), 'getRoles') ? $this->security->getUser()->getRoles() : [];
         $permissions = $this->permissionAccess->getPermissions($boutique);
+        $tokenUser = $this->security->getUser();
+        $userId = null;
+        if ($tokenUser instanceof \App\Entity\User) {
+            $userId = (string) $tokenUser->getId();
+        } elseif (null !== $tokenUser) {
+            $resolved = $this->users->findOneBy(['identifier' => $tokenUser->getUserIdentifier()]);
+            $userId = null !== $resolved ? (string) $resolved->getId() : null;
+        }
 
         return new JsonResponse([
             'modules' => $modules,
             'permissions' => $permissions,
             'roles' => $roles,
+            'userId' => $userId,
         ]);
     }
 }

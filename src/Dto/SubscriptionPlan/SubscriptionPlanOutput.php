@@ -9,6 +9,10 @@ final class SubscriptionPlanOutput
     public ?string $description = null;
     public int $durationMonths;
     public int $priceTnd = 0;
+    /** Null = renouvellement au prix principal. */
+    public ?int $renewalPriceTnd = null;
+    /** Prix effectif de renouvellement (renewalPriceTnd ?? priceTnd). */
+    public int $effectiveRenewalPriceTnd = 0;
     public bool $isFree = false;
     public bool $isVisible = true;
     public bool $isActive = true;

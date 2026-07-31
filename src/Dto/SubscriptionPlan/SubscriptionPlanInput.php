@@ -18,6 +18,10 @@ final class SubscriptionPlanInput
 
     public int $priceTnd = 0;
 
+    /** Null = renouvellement au prix principal (priceTnd). */
+    #[Assert\PositiveOrZero]
+    public ?int $renewalPriceTnd = null;
+
     public bool $isFree = false;
 
     public bool $isVisible = true;

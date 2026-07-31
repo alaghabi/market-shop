@@ -51,11 +51,14 @@ class User extends AbstractEntity implements UserInterface, SoftDeletableInterfa
         private ?\DateTimeImmutable $emailVerifiedAt = null,
         #[ORM\OneToMany(mappedBy: 'user', targetEntity: UserShop::class, cascade: ['persist'], orphanRemoval: true)]
         private ?Collection $userShops = null,
+        #[ORM\OneToMany(mappedBy: 'user', targetEntity: AccountSubscription::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+        private ?Collection $accountSubscriptions = null,
     ) {
         parent::__construct();
         $this->createdAt = new \DateTimeImmutable();
         $this->administeredBoutiques ??= new ArrayCollection();
         $this->userShops ??= new ArrayCollection();
+        $this->accountSubscriptions ??= new ArrayCollection();
 
         if (null !== $boutique) {
             $this->addAdministeredBoutique($boutique);
@@ -228,6 +231,20 @@ class User extends AbstractEntity implements UserInterface, SoftDeletableInterfa
     {
         if (!$this->getUserShops()->contains($userShop)) {
             $this->getUserShops()->add($userShop);
+            $this->touch();
+        }
+    }
+
+    /** @return Collection<int, AccountSubscription> */
+    public function getAccountSubscriptions(): Collection
+    {
+        return $this->accountSubscriptions ?? new ArrayCollection();
+    }
+
+    public function addAccountSubscription(AccountSubscription $accountSubscription): void
+    {
+        if (!$this->getAccountSubscriptions()->contains($accountSubscription)) {
+            $this->getAccountSubscriptions()->add($accountSubscription);
             $this->touch();
         }
     }

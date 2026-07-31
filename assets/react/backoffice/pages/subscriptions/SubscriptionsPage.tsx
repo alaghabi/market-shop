@@ -14,12 +14,16 @@ import { BoutiqueFormSelect, resolveFormBoutiqueId } from '../../components/Bout
 import { ExtensionsBoutiquePanel } from './ExtensionsBoutiquePanel';
 import { ExtensionsAdminPanel } from './ExtensionsAdminPanel';
 import { Pagination } from '../../components/Pagination';
+import { AccountSubscriptionPanel } from './AccountSubscriptionPanel';
+import { AdminAccountSubscriptionPanel } from './AdminAccountSubscriptionPanel';
 
 type SubscriptionPlan = {
   id: string;
   name: string;
   description?: string | null;
   priceTnd: number;
+  renewalPriceTnd?: number | null;
+  effectiveRenewalPriceTnd?: number;
   durationMonths: number;
   isFree: boolean;
   modules?: string[] | null;
@@ -31,6 +35,7 @@ type SubscriptionPlanForm = {
   name: string;
   description: string;
   priceTnd: string;
+  renewalPriceTnd: string;
   durationMonths: string;
   isFree: boolean;
   isActive: boolean;
@@ -56,6 +61,7 @@ const emptyForm: SubscriptionPlanForm = {
   name: '',
   description: '',
   priceTnd: '0',
+  renewalPriceTnd: '',
   durationMonths: '1',
   isFree: false,
   isActive: true,
@@ -70,7 +76,7 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
   const { showNotice } = useNotification();
   const { boutique } = useBoutique();
   const isSuperAdmin = userRoles.includes('ROLE_SUPER_ADMIN');
-  const [tab, setTab] = useState<'plans' | 'extensions'>('plans');
+  const [tab, setTab] = useState<'plans' | 'extensions' | 'accounts'>('plans');
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<SubscriptionPlan | null>(null);
@@ -137,6 +143,7 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
       name: plan.name,
       description: plan.description ?? '',
       priceTnd: String(plan.priceTnd ?? 0),
+      renewalPriceTnd: plan.renewalPriceTnd === null || plan.renewalPriceTnd === undefined ? '' : String(plan.renewalPriceTnd),
       durationMonths: String(plan.durationMonths ?? 1),
       isFree: plan.isFree,
       isActive: plan.isActive,
@@ -146,16 +153,20 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
     setModalOpen(true);
   };
 
-  const payloadFromForm = () => ({
-    name: form.name.trim(),
-    description: form.description.trim() || null,
-    durationMonths: Math.max(1, Number.parseInt(form.durationMonths, 10) || 1),
-    priceTnd: form.isFree ? 0 : Math.max(0, Number.parseInt(form.priceTnd, 10) || 0),
-    isFree: form.isFree,
-    isVisible: form.isVisible,
-    isActive: form.isActive,
-    modules: form.modules,
-  });
+  const payloadFromForm = () => {
+    const renewalRaw = form.renewalPriceTnd.trim();
+    return {
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      durationMonths: Math.max(1, Number.parseInt(form.durationMonths, 10) || 1),
+      priceTnd: form.isFree ? 0 : Math.max(0, Number.parseInt(form.priceTnd, 10) || 0),
+      renewalPriceTnd: form.isFree || renewalRaw === '' ? null : Math.max(0, Number.parseInt(renewalRaw, 10) || 0),
+      isFree: form.isFree,
+      isVisible: form.isVisible,
+      isActive: form.isActive,
+      modules: form.modules,
+    };
+  };
 
   const savePlan = async () => {
     if (!form.name.trim()) {
@@ -189,6 +200,7 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
         description: plan.description ?? null,
         durationMonths: plan.durationMonths,
         priceTnd: plan.priceTnd,
+        renewalPriceTnd: plan.renewalPriceTnd ?? null,
         isFree: plan.isFree,
         isVisible: plan.isVisible,
         isActive: plan.isActive,
@@ -209,6 +221,7 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
         description: plan.description ?? null,
         durationMonths: plan.durationMonths,
         priceTnd: plan.priceTnd,
+        renewalPriceTnd: plan.renewalPriceTnd ?? null,
         isFree: plan.isFree,
         isVisible: plan.isVisible,
         isActive: false,
@@ -299,10 +312,19 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
         <Button variant={tab === 'extensions' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('extensions')}>
           Extensions{isSuperAdmin ? ' & Quotas' : ''}
         </Button>
+        {isSuperAdmin && (
+          <Button variant={tab === 'accounts' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('accounts')}>
+            Comptes
+          </Button>
+        )}
       </div>
 
       {tab === 'extensions' ? (
         isSuperAdmin ? <ExtensionsAdminPanel getAccessToken={getAccessToken} /> : <ExtensionsBoutiquePanel getAccessToken={getAccessToken} />
+      ) : tab === 'accounts' ? (
+        isSuperAdmin && <AdminAccountSubscriptionPanel getAccessToken={getAccessToken} />
+      ) : !isSuperAdmin ? (
+        <AccountSubscriptionPanel getAccessToken={getAccessToken} />
       ) : (
       <>
       <Card>
@@ -321,9 +343,18 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
                       <Badge tone={plan.isVisible ? 'success' : 'warning'}>{plan.isVisible ? 'Publié' : 'Masqué'}</Badge>
                     </div>
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 12 }}>
+                  <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>
                     {plan.isFree ? 'Gratuit' : `${plan.priceTnd.toFixed(0)} TND`}
                     <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--bo-text-muted)' }}>/{plan.durationMonths} mois</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--bo-text-secondary)', marginBottom: 12 }}>
+                    Renouvellement :{' '}
+                    {plan.isFree
+                      ? 'Gratuit'
+                      : `${(plan.effectiveRenewalPriceTnd ?? plan.renewalPriceTnd ?? plan.priceTnd).toFixed(0)} TND`}
+                    {plan.renewalPriceTnd === null || plan.renewalPriceTnd === undefined
+                      ? ' (prix principal)'
+                      : ''}
                   </div>
                   {plan.modules && plan.modules.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
@@ -399,10 +430,23 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
             <FormField label="Durée (mois)" required>
               <Input type="number" min={1} value={form.durationMonths} onChange={(e) => setForm({ ...form, durationMonths: e.target.value })} />
             </FormField>
-            <FormField label="Prix TND" required>
+            <FormField label="Prix principal (TND)" required>
               <Input type="number" min={0} disabled={form.isFree} value={form.priceTnd} onChange={(e) => setForm({ ...form, priceTnd: e.target.value })} />
             </FormField>
           </div>
+          <FormField
+            label="Prix de renouvellement (TND)"
+            hint="Laisser vide pour utiliser le prix principal. Les extensions s'ajoutent toujours au renouvellement."
+          >
+            <Input
+              type="number"
+              min={0}
+              disabled={form.isFree}
+              value={form.renewalPriceTnd}
+              placeholder="Identique au prix principal"
+              onChange={(e) => setForm({ ...form, renewalPriceTnd: e.target.value })}
+            />
+          </FormField>
           <FormField label="Modules inclus" hint="Sélectionnez les modules existants inclus dans ce plan.">
             {modulesLoading ? <LoadingState /> : moduleOptions.length === 0 ? (
               <p style={{ margin: 0, color: 'var(--bo-text-muted)', fontSize: 13 }}>Aucun module disponible.</p>
@@ -425,7 +469,7 @@ export function SubscriptionsPage({ getAccessToken, userRoles = [] }: { getAcces
             )}
           </FormField>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-            <label><input type="checkbox" checked={form.isFree} onChange={(e) => setForm({ ...form, isFree: e.target.checked, priceTnd: e.target.checked ? '0' : form.priceTnd })} /> Gratuit</label>
+            <label><input type="checkbox" checked={form.isFree} onChange={(e) => setForm({ ...form, isFree: e.target.checked, priceTnd: e.target.checked ? '0' : form.priceTnd, renewalPriceTnd: e.target.checked ? '' : form.renewalPriceTnd })} /> Gratuit</label>
             <label><input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /> Actif</label>
             <label><input type="checkbox" checked={form.isVisible} onChange={(e) => setForm({ ...form, isVisible: e.target.checked })} /> Publié</label>
           </div>

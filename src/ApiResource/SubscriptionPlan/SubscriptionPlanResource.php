@@ -29,6 +29,13 @@ use App\State\SubscriptionPlan\SubscriptionPlanProvider;
             output: SubscriptionPlanOutput::class,
             provider: SubscriptionPlanProvider::class,
         ),
+        new GetCollection(
+            name: 'public_subscription_plans',
+            uriTemplate: '/public/subscription-plans',
+            security: "is_granted('PUBLIC_ACCESS')",
+            output: SubscriptionPlanOutput::class,
+            provider: SubscriptionPlanProvider::class,
+        ),
         new Post(
             uriTemplate: '/admin/subscription-plans',
             security: "is_granted('ROLE_SUPER_ADMIN')",
@@ -66,6 +73,7 @@ final class SubscriptionPlanResource
     public ?string $description = null;
     public int $durationMonths;
     public int $priceTnd = 0;
+    public ?int $renewalPriceTnd = null;
     public bool $isFree = false;
     public bool $isVisible = true;
     public bool $isActive = true;

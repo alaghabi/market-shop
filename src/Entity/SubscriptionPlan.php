@@ -20,6 +20,9 @@ class SubscriptionPlan extends AbstractEntity
         private ?string $description = null,
         #[ORM\Column]
         private int $priceTnd = 0,
+        /** Prix de renouvellement en millimes. Null = utiliser priceTnd. */
+        #[ORM\Column(nullable: true)]
+        private ?int $renewalPriceTnd = null,
         #[ORM\Column]
         private bool $isFree = false,
         #[ORM\Column]
@@ -96,8 +99,25 @@ class SubscriptionPlan extends AbstractEntity
 
     public function setPriceTnd(int $priceTnd): void
     {
-        $this->priceTnd = $priceTnd;
+        $this->priceTnd = max(0, $priceTnd);
         $this->touch();
+    }
+
+    public function getRenewalPriceTnd(): ?int
+    {
+        return $this->renewalPriceTnd;
+    }
+
+    public function setRenewalPriceTnd(?int $renewalPriceTnd): void
+    {
+        $this->renewalPriceTnd = null === $renewalPriceTnd ? null : max(0, $renewalPriceTnd);
+        $this->touch();
+    }
+
+    /** Prix appliqué au renouvellement : renewalPriceTnd si défini, sinon priceTnd. */
+    public function getEffectiveRenewalPriceTnd(): int
+    {
+        return $this->renewalPriceTnd ?? $this->priceTnd;
     }
 
     public function isFree(): bool

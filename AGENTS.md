@@ -145,6 +145,39 @@ Build complete multi-boutique auth, subscription, RBAC & module management syste
 - **Bug fix** — pluriel `nouveau{x}` corrigé dans StatistiquesPage (condition vérifiée dynamiquement)
 - **TypeScript + webpack** — clean, aucun warning build
 
+### Done (this session - compte admin / account subscription)
+- **AccountSubscription entity** — user FK (CASCADE), subscriptionPlan FK (SET NULL), status (active/expired/replaced via `AccountSubscriptionStatus` enum), startDate/endDate, replacedBy self-ref, createdAt/updatedAt, changedBy
+- **AccountSubscriptionExtension entity** — grant join (subscription×extension, unique), activatedAt/expiresAt/activatedBy, isActive, expiryNotifiedAt
+- **AccountSubscriptionService** — getActiveSubscription (lecture seule, pas de mutation), getMaxBoutiquesForPlanAndExtensions (null = illimité ; clé absente max_boutiques = illimité), getPublishedBoutiqueCount, getBoutiqueCreationCap, cache Redis `-1`↔`null` avec hit detection, expireOverdueSubscriptions (cron)
+- **AccountSubscriptionRepository** — findActiveByUser, findExpiredButStillActive (alias DQL `sub`), findAllPaginated
+- **AccountSubscriptionCacheSubscriber** — Doctrine listener invalidant le cache Redis à chaque changement
+- **API `AccountSubscriptionResource`** — 4 opérations ROLE_BOUTIQUE_ADMIN : GET `/api/account/subscription` (output `publishedBoutiques`), POST subscribe (refuse downgrade si trop de boutiques publiées), POST renew, GET change-preview
+- **API publique** — GET `/api/public/subscription-plans` (plans actifs+visibles, sans redirect 401)
+- **API admin** — GET+POST `/api/admin/account-subscriptions` (GetCollection + create)
+- **Migration `Version20260731094000`** — tables + index partiel unique `(user_id) WHERE status='active'` + index `(user_id, status)`
+- **Commands** — SeedExtensionsCommand, SeedQuotaDefinitionsCommand (Premium `max_boutiques => null`), ExtensionExpiryCommand, AccountSubscriptionExpiryCommand
+- **Frontend** — `AccountSubscriptionPanel.tsx` (quota = publiées), `AdminAccountSubscriptionPanel.tsx` (picker via `/admin/boutique-admins`), `SubscriptionPlansSlider` (fetch public natif)
+- **Bug sécurité security.yaml** — règle générique `{ path: ^/api/account, roles: ROLE_CUSTOMER }` matchait avant `/api/account/subscription` → 403 ; règle spécifique déplacée avant la générique
+- **Bug provider GET body null** — `read: false` sur les Get court-circuitait le provider ; retiré (le `/subscription/summary` fonctionne sans), POST gardent `read: false` + `status: 200`
+- **Bug authentification** — `BearerTokenAuthenticator` renvoie `InMemoryUser` pour tokens locaux ; `AccountSubscriptionProvider`/`Processor` résolvent désormais le vrai `User` via `UserRepository::findOneBy(['identifier' => ...])`
+- **Tests** — `tests/functional/Api/AccountSubscriptionApiTest.php` (4 tests) : read/subscribe/renew/change-preview du flux complet
+
+### Done (this session - SUPER_ADMIN abonnement + publication multi-boutiques + nettoyage Microsoft + Home page plans slider)
+- **Besoin 1: SUPER_ADMIN crée abonnements validés** —
+  - `AdminAccountSubscriptionInput` DTO (userId, planId, extensionIds[], startDate, endDate)
+  - `AdminAccountSubscriptionResource` GET+POST `/api/admin/account-subscriptions` (ROLE_SUPER_ADMIN)
+  - `AdminAccountSubscriptionProcessor` crée AccountSubscription Active, sync extensions, flush puis invalidate, audit log
+  - Seeder: plan **Business 1 mois** (4900 TND, 1 mois, max_boutiques=2) ; Premium quotas `null` (illimité)
+  - Frontend: `AdminAccountSubscriptionPanel.tsx` — picker via `/admin/boutique-admins`, plan, extensions cumulables, dates optionnelles
+- **Besoin 2: Admin boutique = multi-boutiques + extensions cumulables + auto-publication** —
+  - `BoutiqueProcessor.create()` : transaction boutique+UserShop, plafond soft création (`getBoutiqueCreationCap`), `setOwner($user)`
+  - `BoutiqueProcessor.publishBoutique()` : contrôle owner, `approvedAt`, quota publié via `countPublishedByOwner` + extensions
+  - Downgrade refusé si `publishedBoutiques > newMax`
+  - DashboardPage: `api.patch` publish/unpublish ; `isOwner` via `access.userId === boutique.ownerId`
+- **Home Page : Subscription Plans Slider** — fetch `/api/public/subscription-plans` (pas ApiClient, pas 401 redirect)
+- **Revue code appliquée** : secret Google vidé de `.env.prod`, cache -1/null, Premium null, endpoint public, index unique partiel, cron expiry, CSS `.bo-btn-success`
+- **Vérifications** : php -l OK, phpstan clean, tsc --noEmit OK, 70 tests / 236 assertions OK
+
 ## Next Steps
 1. Add permission-check middleware/gate for API Platform operations
 2. Update BoutiqueContext to support permission-based access (role + permission per boutique)
@@ -224,3 +257,5 @@ Build complete multi-boutique auth, subscription, RBAC & module management syste
 - `assets/react/backoffice/layout/Header.tsx` — boutique selector, user menu
 - `assets/react/backoffice/pages/*/` — 12 page modules (dashboard, products, categories, filters, orders, customers, promotions, cms, settings, employees, subscriptions, super-admin)
 - `assets/styles/backoffice.css` — complete design system (80+ CSS variables)
+- `assets/react/components/SubscriptionPlansSlider.tsx` — animated plans carousel for public home page
+- `assets/react/pages/home/index.tsx` — public home page with integrated plans slider

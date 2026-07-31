@@ -61,7 +61,8 @@ final class SubscriptionPlanProcessor implements ProcessorInterface
             name: $data->name,
             description: $data->description,
             durationMonths: $data->durationMonths,
-            priceTnd: $data->priceTnd,
+            priceTnd: $data->isFree ? 0 : max(0, $data->priceTnd),
+            renewalPriceTnd: $data->isFree ? null : $data->renewalPriceTnd,
             isFree: $data->isFree,
             isVisible: $data->isVisible,
             isActive: $data->isActive,
@@ -89,7 +90,8 @@ final class SubscriptionPlanProcessor implements ProcessorInterface
         $entity->setName($data->name);
         $entity->setDescription($data->description);
         $entity->setDurationMonths($data->durationMonths);
-        $entity->setPriceTnd($data->priceTnd);
+        $entity->setPriceTnd($data->isFree ? 0 : $data->priceTnd);
+        $entity->setRenewalPriceTnd($data->isFree ? null : $data->renewalPriceTnd);
         $entity->setIsFree($data->isFree);
         $entity->setIsVisible($data->isVisible);
         $entity->setIsActive($data->isActive);
@@ -216,6 +218,8 @@ final class SubscriptionPlanProcessor implements ProcessorInterface
         $output->description = $entity->getDescription();
         $output->durationMonths = $entity->getDurationMonths();
         $output->priceTnd = $entity->getPriceTnd();
+        $output->renewalPriceTnd = $entity->getRenewalPriceTnd();
+        $output->effectiveRenewalPriceTnd = $entity->getEffectiveRenewalPriceTnd();
         $output->isFree = $entity->isFree();
         $output->isVisible = $entity->isVisible();
         $output->isActive = $entity->isActive();
