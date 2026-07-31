@@ -10,8 +10,6 @@ KEYCLOAK_REALM="${KEYCLOAK_REALM:-hanooti}"
 : "${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}"
 : "${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required}"
 : "${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET is required}"
-: "${MICROSOFT_CLIENT_ID:?MICROSOFT_CLIENT_ID is required}"
-: "${MICROSOFT_CLIENT_SECRET:?MICROSOFT_CLIENT_SECRET is required}"
 
 "$KCADM" config credentials \
     --server "$KEYCLOAK_SERVER_URL" \
@@ -48,8 +46,6 @@ configure_provider() {
 }
 
 configure_provider google google "$GOOGLE_CLIENT_ID" "$GOOGLE_CLIENT_SECRET"
-configure_provider microsoft microsoft "$MICROSOFT_CLIENT_ID" "$MICROSOFT_CLIENT_SECRET" \
-    -s "config.tenantId=${MICROSOFT_TENANT_ID:-common}"
 # New brokered users are customers. Existing Hanooti users are resolved by
 # email and keep the roles stored in the application database.
 "$KCADM" add-roles \
@@ -58,4 +54,4 @@ configure_provider microsoft microsoft "$MICROSOFT_CLIENT_ID" "$MICROSOFT_CLIENT
     -r "$KEYCLOAK_REALM" \
     >/dev/null
 
-printf 'Configured Keycloak providers: google, microsoft\n'
+printf 'Configured Keycloak providers: google\n'

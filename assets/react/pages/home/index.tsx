@@ -7,6 +7,7 @@ import { PublicHeader } from '../../components/PublicHeader';
 import { frontOfficeUrl } from '../../backoffice/utils/frontOfficeUrl';
 import { formatReviewDate, reviewInitial, usePlatformReviews } from '../application-reviews/platformReviews';
 import { PlatformSocialLinks } from '../../components/PlatformSocialLinks';
+import { SubscriptionPlansSlider } from '../../components/SubscriptionPlansSlider';
 
 type HomeBoutique = {
   name: string;
@@ -90,6 +91,8 @@ export function HomePage({ canAccessBackOffice, boutiques }: { canAccessBackOffi
           </div>
         </div>
       </section>
+
+      <SubscriptionPlansSlider canAccessBackOffice={canAccessBackOffice} />
 
       <section className="lovable-section lovable-section--muted" id="Boutiques">
         <div className="lovable-container">

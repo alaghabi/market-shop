@@ -32,7 +32,7 @@ final class SeedSubscriptionModulesCommand extends Command
         ['code' => 'abandoned_cart', 'name' => 'Panier abandonné', 'description' => 'Récupération de paniers', 'category' => 'marketing', 'icon' => 'cart-plus', 'isCore' => false],
         ['code' => 'order_printing', 'name' => 'Impression de commandes', 'description' => 'Bons de livraison et factures', 'category' => 'commandes', 'icon' => 'print', 'isCore' => false],
         ['code' => 'customer_auth', 'name' => 'Comptes clients', 'description' => 'Connexion et comptes clients de la boutique', 'category' => 'auth', 'icon' => 'user-round', 'isCore' => true],
-        ['code' => 'social_login', 'name' => 'Connexion sociale', 'description' => 'Google, Microsoft', 'category' => 'auth', 'icon' => 'user-check', 'isCore' => false],
+        ['code' => 'social_login', 'name' => 'Connexion sociale', 'description' => 'Google', 'category' => 'auth', 'icon' => 'user-check', 'isCore' => false],
         ['code' => 'pos', 'name' => 'Point de vente', 'description' => 'Caisse enregistreuse', 'category' => 'boutique', 'icon' => 'cash-register', 'isCore' => false],
     ];
 

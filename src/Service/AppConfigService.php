@@ -134,6 +134,7 @@ final readonly class AppConfigService
                 'subdomains_enabled' => false,
                 'custom_domains_enabled' => true,
                 'max_boutiques_per_admin' => 1,
+                'max_owned_boutiques_per_admin' => 50,
             ],
             'subscriptions' => [
                 'enabled' => true,

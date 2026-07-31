@@ -102,7 +102,7 @@ export function LoginPage({ onSignIn, onSignInWithProvider, onSignUp, initialMod
           <Link className="lovable-brand" to="/">
             <BrandLogo />
           </Link>
-          <span className="lovable-pill">Marketplace B2B</span>
+          <span className="lovable-pill">Hanooti</span>
           <h1>{isRegister ? 'Lancez votre boutique professionnelle en quelques minutes.' : 'Reconnectez-vous à votre espace boutique.'}</h1>
            <p>Gérez vos produits, vos commandes, vos transporteurs et votre présence marketplace depuis une interface pensée pour les indépendants.</p>
            <div className="lovable-auth__proof-grid" aria-live="polite">

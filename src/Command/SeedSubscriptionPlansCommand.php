@@ -23,10 +23,13 @@ final class SeedSubscriptionPlansCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $existing = $this->em->getRepository(SubscriptionPlan::class)->findAll();
-        if (count($existing) > 0) {
-            $output->writeln('Plans already seeded ('.count($existing).' found).');
+        $existingByName = [];
+        foreach ($existing as $plan) {
+            $existingByName[$plan->getName()] = $plan;
+        }
 
-            return Command::SUCCESS;
+        if (count($existing) > 0) {
+            $output->writeln(sprintf('Found %d existing plan(s); missing plans will be added.', count($existing)));
         }
 
         $allModuleCodes = ['reviews', 'wishlist', 'customer_auth', 'loyalty', 'coupons', 'promotions', 'blog', 'brands', 'multi_address', 'chatbot', 'seo_advanced', 'custom_domain', 'analytics', 'delivery_tracking', 'wholesale', 'gift_cards', 'newsletter', 'abandoned_cart', 'order_printing', 'social_login', 'pos'];
@@ -43,6 +46,15 @@ final class SeedSubscriptionPlansCommand extends Command
                 'isFree' => true,
                 'isVisible' => true,
                 'allowedModules' => $basicAllowed,
+            ],
+            [
+                'name' => 'Business 1 mois',
+                'description' => 'Solution complète pour développer votre activité en ligne, engagement mensuel.',
+                'durationMonths' => 1,
+                'priceTnd' => 4900,
+                'isFree' => false,
+                'isVisible' => true,
+                'allowedModules' => $businessAllowed,
             ],
             [
                 'name' => 'Business 3 mois',
@@ -88,7 +100,13 @@ final class SeedSubscriptionPlansCommand extends Command
             $moduleMap[$m->getCode()] = $m;
         }
 
+        $created = 0;
         foreach ($plans as $data) {
+            if (isset($existingByName[$data['name']])) {
+                $output->writeln(sprintf('  Plan "%s" already exists, skipping.', $data['name']));
+                continue;
+            }
+
             $plan = new SubscriptionPlan(
                 name: $data['name'],
                 description: $data['description'],
@@ -114,12 +132,13 @@ final class SeedSubscriptionPlansCommand extends Command
                 $this->em->persist($sm);
             }
 
+            ++$created;
             $output->writeln(sprintf('  Created plan "%s" with %d modules.', $data['name'], count($allowed)));
         }
 
         $this->em->flush();
 
-        $output->writeln(sprintf('Seeded %d subscription plans.', count($plans)));
+        $output->writeln(sprintf('Seeded %d subscription plans.', $created));
 
         return Command::SUCCESS;
     }

@@ -493,6 +493,16 @@
   background: #dc2626;
 }
 
+.bo-btn-success {
+  background: linear-gradient(135deg, var(--bo-success), #34d399);
+  color: white;
+  box-shadow: 0 14px 30px rgba(16, 185, 129, 0.22);
+}
+
+.bo-btn-success:hover:not(:disabled) {
+  background: #059669;
+}
+
 .bo-btn-sm {
   padding: 7px 13px;
   font-size: 13px;

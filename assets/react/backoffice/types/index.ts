@@ -7,6 +7,8 @@ export type Boutique = {
   customDomain?: string | null;
   isPublished?: boolean;
   isVisiblePublicly?: boolean;
+  approvedAt?: string | null;
+  ownerId?: string | null;
   productsCount?: number;
   usersCount?: number;
 };

@@ -27,6 +27,7 @@ final class SeedQuotaDefinitionsCommand extends Command
         ['code' => 'disk_space_mb', 'name' => 'Espace disque', 'unit' => 'Mo', 'category' => 'medias', 'icon' => 'database'],
         ['code' => 'max_domains', 'name' => 'Domaines personnalises', 'unit' => 'domaines', 'category' => 'boutique', 'icon' => 'globe'],
         ['code' => 'max_subdomains', 'name' => 'Sous-domaines', 'unit' => 'sous-domaines', 'category' => 'boutique', 'icon' => 'sitemap'],
+        ['code' => 'max_boutiques', 'name' => 'Boutiques', 'unit' => 'boutiques', 'category' => 'boutique', 'icon' => 'store'],
         ['code' => 'max_marketing_campaigns', 'name' => 'Campagnes marketing', 'unit' => 'campagnes', 'category' => 'marketing', 'icon' => 'bullhorn'],
     ];
 
@@ -34,11 +35,28 @@ final class SeedQuotaDefinitionsCommand extends Command
      * Base limits per plan name, matching SeedSubscriptionPlansCommand. Null means unlimited.
      */
     private const PLAN_LIMITS = [
-        'Starter' => ['max_products' => 30, 'max_categories' => 5, 'max_employees' => 1, 'max_admins' => 1, 'max_customers' => 200, 'max_brands' => 5, 'max_attributes' => 10, 'max_images' => 100, 'max_videos' => 0, 'disk_space_mb' => 500, 'max_domains' => 0, 'max_subdomains' => 1, 'max_marketing_campaigns' => 0],
-        'Business 3 mois' => ['max_products' => 300, 'max_categories' => 30, 'max_employees' => 5, 'max_admins' => 2, 'max_customers' => 5000, 'max_brands' => 30, 'max_attributes' => 50, 'max_images' => 2000, 'max_videos' => 20, 'disk_space_mb' => 5000, 'max_domains' => 1, 'max_subdomains' => 3, 'max_marketing_campaigns' => 10],
-        'Business 6 mois' => ['max_products' => 300, 'max_categories' => 30, 'max_employees' => 5, 'max_admins' => 2, 'max_customers' => 5000, 'max_brands' => 30, 'max_attributes' => 50, 'max_images' => 2000, 'max_videos' => 20, 'disk_space_mb' => 5000, 'max_domains' => 1, 'max_subdomains' => 3, 'max_marketing_campaigns' => 10],
-        'Business 12 mois' => ['max_products' => 300, 'max_categories' => 30, 'max_employees' => 5, 'max_admins' => 2, 'max_customers' => 5000, 'max_brands' => 30, 'max_attributes' => 50, 'max_images' => 2000, 'max_videos' => 20, 'disk_space_mb' => 5000, 'max_domains' => 1, 'max_subdomains' => 3, 'max_marketing_campaigns' => 10],
-        'Premium 12 mois' => [], // unlimited (no rows -> SubscriptionManager treats all as unrestricted)
+        'Starter' => ['max_products' => 30, 'max_categories' => 5, 'max_employees' => 1, 'max_admins' => 1, 'max_customers' => 200, 'max_brands' => 5, 'max_attributes' => 10, 'max_images' => 100, 'max_videos' => 0, 'disk_space_mb' => 500, 'max_domains' => 0, 'max_subdomains' => 1, 'max_boutiques' => 1, 'max_marketing_campaigns' => 0],
+        'Business 1 mois' => ['max_products' => 300, 'max_categories' => 30, 'max_employees' => 5, 'max_admins' => 2, 'max_customers' => 5000, 'max_brands' => 30, 'max_attributes' => 50, 'max_images' => 2000, 'max_videos' => 20, 'disk_space_mb' => 5000, 'max_domains' => 1, 'max_subdomains' => 3, 'max_boutiques' => 2, 'max_marketing_campaigns' => 10],
+        'Business 3 mois' => ['max_products' => 300, 'max_categories' => 30, 'max_employees' => 5, 'max_admins' => 2, 'max_customers' => 5000, 'max_brands' => 30, 'max_attributes' => 50, 'max_images' => 2000, 'max_videos' => 20, 'disk_space_mb' => 5000, 'max_domains' => 1, 'max_subdomains' => 3, 'max_boutiques' => 2, 'max_marketing_campaigns' => 10],
+        'Business 6 mois' => ['max_products' => 300, 'max_categories' => 30, 'max_employees' => 5, 'max_admins' => 2, 'max_customers' => 5000, 'max_brands' => 30, 'max_attributes' => 50, 'max_images' => 2000, 'max_videos' => 20, 'disk_space_mb' => 5000, 'max_domains' => 1, 'max_subdomains' => 3, 'max_boutiques' => 2, 'max_marketing_campaigns' => 10],
+        'Business 12 mois' => ['max_products' => 300, 'max_categories' => 30, 'max_employees' => 5, 'max_admins' => 2, 'max_customers' => 5000, 'max_brands' => 30, 'max_attributes' => 50, 'max_images' => 2000, 'max_videos' => 20, 'disk_space_mb' => 5000, 'max_domains' => 1, 'max_subdomains' => 3, 'max_boutiques' => 2, 'max_marketing_campaigns' => 10],
+        // Explicit null = unlimited (missing key ≠ unlimited in AccountSubscriptionService / SubscriptionManager).
+        'Premium 12 mois' => [
+            'max_products' => null,
+            'max_categories' => null,
+            'max_employees' => null,
+            'max_admins' => null,
+            'max_customers' => null,
+            'max_brands' => null,
+            'max_attributes' => null,
+            'max_images' => null,
+            'max_videos' => null,
+            'disk_space_mb' => null,
+            'max_domains' => null,
+            'max_subdomains' => null,
+            'max_boutiques' => null,
+            'max_marketing_campaigns' => null,
+        ],
     ];
 
     public function __construct(
@@ -49,15 +67,20 @@ final class SeedQuotaDefinitionsCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $existing = $this->em->getRepository(QuotaDefinition::class)->findAll();
-        if (count($existing) > 0) {
-            $output->writeln('Quota definitions already seeded ('.count($existing).' found).');
-
-            return Command::SUCCESS;
-        }
+        $quotaRepository = $this->em->getRepository(QuotaDefinition::class);
+        $planQuotaRepository = $this->em->getRepository(PlanQuota::class);
 
         $quotaMap = [];
+        foreach ($quotaRepository->findAll() as $quota) {
+            $quotaMap[$quota->getCode()] = $quota;
+        }
+
+        $addedQuotas = 0;
         foreach (self::QUOTAS as $data) {
+            if (isset($quotaMap[$data['code']])) {
+                continue;
+            }
+
             $quota = new QuotaDefinition(
                 code: $data['code'],
                 name: $data['name'],
@@ -67,8 +90,10 @@ final class SeedQuotaDefinitionsCommand extends Command
             );
             $this->em->persist($quota);
             $quotaMap[$data['code']] = $quota;
+            ++$addedQuotas;
         }
 
+        $addedLimits = 0;
         $plans = $this->em->getRepository(SubscriptionPlan::class)->findAll();
         foreach ($plans as $plan) {
             $limits = self::PLAN_LIMITS[$plan->getName()] ?? null;
@@ -80,14 +105,17 @@ final class SeedQuotaDefinitionsCommand extends Command
                 if (!isset($quotaMap[$code])) {
                     continue;
                 }
-                $planQuota = new PlanQuota(plan: $plan, quota: $quotaMap[$code], limitValue: $limitValue);
-                $this->em->persist($planQuota);
+                if (null !== $planQuotaRepository->findOneByPlanAndQuota($plan, $quotaMap[$code])) {
+                    continue;
+                }
+                $this->em->persist(new PlanQuota(plan: $plan, quota: $quotaMap[$code], limitValue: $limitValue));
+                ++$addedLimits;
             }
         }
 
         $this->em->flush();
 
-        $output->writeln(sprintf('Seeded %d quota definitions across %d plans.', count(self::QUOTAS), count($plans)));
+        $output->writeln(sprintf('Seeded %d new quota definitions and %d new plan limits.', $addedQuotas, $addedLimits));
 
         return Command::SUCCESS;
     }

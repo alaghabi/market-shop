@@ -151,4 +151,30 @@ final class BoutiqueRepository extends ServiceEntityRepository
     {
         return $this->findBy(['status' => \App\Enum\BoutiqueStatus::Pending, 'deletedAt' => null], ['createdAt' => 'DESC']);
     }
+
+    public function countPublishedByOwner(\App\Entity\User $owner): int
+    {
+        return (int) $this->createQueryBuilder('boutique')
+            ->select('COUNT(boutique.id)')
+            ->andWhere('boutique.owner = :owner')
+            ->andWhere('boutique.isPublished = :published')
+            ->andWhere('boutique.deletedAt IS NULL')
+            ->setParameter('owner', $owner)
+            ->setParameter('published', true)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    public function countOwnedByOwner(\App\Entity\User $owner): int
+    {
+        return (int) $this->createQueryBuilder('boutique')
+            ->select('COUNT(boutique.id)')
+            ->andWhere('boutique.owner = :owner')
+            ->andWhere('boutique.deletedAt IS NULL')
+            ->andWhere('boutique.status != :archived')
+            ->setParameter('owner', $owner)
+            ->setParameter('archived', \App\Enum\BoutiqueStatus::Archived)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
 }

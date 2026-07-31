@@ -83,6 +83,7 @@ type BoutiqueAccess = {
   modules: Record<string, { accessible: boolean; globallyEnabled: boolean; allowedBySubscription: boolean; enabledInBoutique: boolean }>;
   permissions: string[];
   roles: string[];
+  userId?: string | null;
 };
 type PublicationRequest = { id: string; status: string; requestedAt: string; reason?: string | null };
 
@@ -408,6 +409,31 @@ export function DashboardPage({ getAccessToken, userRoles = [] }: { getAccessTok
     { label: 'Erreurs de paiement', value: '—', visible: featureIsVisible('payments'), tone: 'error' as const },
   ].filter((item) => item.visible);
 
+  const isOwner = Boolean(boutique.ownerId && access.userId && boutique.ownerId === access.userId);
+  const isSuperAdmin = userRoles.includes('ROLE_SUPER_ADMIN') || access.roles.includes('ROLE_SUPER_ADMIN');
+  const canSelfPublish = (isOwner || isSuperAdmin) && boutique.approvedAt && !boutique.isPublished;
+  const canUnpublish = (isOwner || isSuperAdmin) && boutique.isPublished;
+
+  const publishBoutique = async () => {
+    try {
+      await api.patch(`/boutiques/${boutique.id}/publish`, {});
+      showNotice('Boutique publiée avec succès.', 'success');
+      refresh();
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : 'Impossible de publier la boutique.', 'error');
+    }
+  };
+
+  const unpublishBoutique = async () => {
+    try {
+      await api.patch(`/boutiques/${boutique.id}/unpublish`, {});
+      showNotice('Boutique dépubliée.', 'success');
+      refresh();
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : 'Impossible de dépublier la boutique.', 'error');
+    }
+  };
+
   return (
     <div className="dashboard-page">
       <PageHeader
@@ -416,7 +442,7 @@ export function DashboardPage({ getAccessToken, userRoles = [] }: { getAccessTok
         actions={<Button variant="secondary" onClick={refresh}>Actualiser</Button>}
       />
 
-      {canRequestPublication && !boutique.isPublished && (
+      {canRequestPublication && !boutique.isPublished && !boutique.approvedAt && (
         <Card style={{ marginTop: 18, borderColor: 'var(--bo-primary)' }}>
           <CardBody>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
@@ -431,6 +457,38 @@ export function DashboardPage({ getAccessToken, userRoles = [] }: { getAccessTok
               ) : (
                 <Button variant="primary" onClick={() => void requestPublication()}>Demander la publication</Button>
               )}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {canRequestPublication && boutique.approvedAt && !boutique.isPublished && canSelfPublish && (
+        <Card style={{ marginTop: 18, borderColor: 'var(--bo-success)' }}>
+          <CardBody>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <strong>Boutique approuvée</strong>
+                <div style={{ color: 'var(--bo-text-muted)', fontSize: 13, marginTop: 4 }}>
+                  Votre boutique a été approuvée par le Super Admin. Vous pouvez maintenant la publier.
+                </div>
+              </div>
+              <Button variant="success" onClick={publishBoutique}>Publier la boutique</Button>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {canRequestPublication && boutique.isPublished && canUnpublish && (
+        <Card style={{ marginTop: 18, borderColor: 'var(--bo-warning)' }}>
+          <CardBody>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <strong>Boutique publiée</strong>
+                <div style={{ color: 'var(--bo-text-muted)', fontSize: 13, marginTop: 4 }}>
+                  Votre boutique est visible publiquement. Vous pouvez la dépublier à tout moment.
+                </div>
+              </div>
+              <Button variant="secondary" onClick={unpublishBoutique}>Dépublier la boutique</Button>
             </div>
           </CardBody>
         </Card>

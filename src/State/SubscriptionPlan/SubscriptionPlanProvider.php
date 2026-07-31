@@ -31,7 +31,7 @@ final class SubscriptionPlanProvider implements ProviderInterface
         $request = $request instanceof Request ? $request : null;
         $pagination = $this->scope->pagination($request);
 
-        if ('boutique_subscription_plans' === $operationName) {
+        if ('boutique_subscription_plans' === $operationName || 'public_subscription_plans' === $operationName) {
             $result = $this->repository->findForBackoffice(
                 true,
                 $pagination['page'],
@@ -77,6 +77,8 @@ final class SubscriptionPlanProvider implements ProviderInterface
         $output->description = $entity->getDescription();
         $output->durationMonths = $entity->getDurationMonths();
         $output->priceTnd = $entity->getPriceTnd();
+        $output->renewalPriceTnd = $entity->getRenewalPriceTnd();
+        $output->effectiveRenewalPriceTnd = $entity->getEffectiveRenewalPriceTnd();
         $output->isFree = $entity->isFree();
         $output->isVisible = $entity->isVisible();
         $output->isActive = $entity->isActive();

@@ -31,7 +31,7 @@ import {
   faEye,
   faEyeSlash,
 } from '@fortawesome/free-solid-svg-icons';
-import { faFacebook, faGoogle, faInstagram, faLinkedin, faMicrosoft, faTiktok, faWhatsapp, faXTwitter, faYoutube } from '@fortawesome/free-brands-svg-icons';
+import { faFacebook, faGoogle, faInstagram, faLinkedin, faTiktok, faWhatsapp, faXTwitter, faYoutube } from '@fortawesome/free-brands-svg-icons';
 
 library.add(
   faArrowRight,
@@ -51,7 +51,6 @@ library.add(
   faInstagram,
   faLinkedin,
   faLightbulb,
-  faMicrosoft,
   faLock,
   faPalette,
   faPenToSquare,
@@ -111,5 +110,4 @@ export const appIcons = {
   utensils: 'utensils',
   facebook: 'facebook',
   google: ['fab', 'google'] as IconProp,
-  microsoft: ['fab', 'microsoft'] as IconProp,
 } as const;

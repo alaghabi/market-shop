@@ -51,7 +51,9 @@ security:
         - { path: ^/api/auth/verify-email, roles: PUBLIC_ACCESS }
         - { path: ^/api/auth/resend-email-verification, roles: PUBLIC_ACCESS }
         - { path: ^/api/boutique/auth, roles: PUBLIC_ACCESS }
+        - { path: ^/api/account/subscription, roles: ROLE_BOUTIQUE_ADMIN }
         - { path: ^/api/account, roles: ROLE_CUSTOMER }
+        - { path: ^/api/admin/account-subscriptions, roles: ROLE_SUPER_ADMIN }
         - { path: ^/api/boutiques$, roles: PUBLIC_ACCESS }
         - { path: ^/api/boutiques/[^/]+$, roles: PUBLIC_ACCESS }
         - { path: ^/api/boutiques/[^/]+/auth, roles: PUBLIC_ACCESS }

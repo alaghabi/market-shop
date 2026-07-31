@@ -90,7 +90,7 @@ use App\State\Boutique\BoutiqueProvider;
         new Patch(
             name: 'publish_boutique',
             uriTemplate: '/boutiques/{id}/publish',
-            security: "is_granted('ROLE_SUPER_ADMIN')",
+            security: "is_granted('ROLE_BOUTIQUE_ADMIN') or is_granted('ROLE_SUPER_ADMIN')",
             input: BoutiqueActionInput::class,
             output: BoutiqueOutput::class,
             processor: BoutiqueProcessor::class,
@@ -99,7 +99,7 @@ use App\State\Boutique\BoutiqueProvider;
         new Patch(
             name: 'unpublish_boutique',
             uriTemplate: '/boutiques/{id}/unpublish',
-            security: "is_granted('ROLE_SUPER_ADMIN')",
+            security: "is_granted('ROLE_BOUTIQUE_ADMIN') or is_granted('ROLE_SUPER_ADMIN')",
             input: BoutiqueActionInput::class,
             output: BoutiqueOutput::class,
             processor: BoutiqueProcessor::class,

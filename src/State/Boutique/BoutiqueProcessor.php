@@ -10,13 +10,17 @@ use App\Dto\Boutique\BoutiqueActionInput;
 use App\Dto\Boutique\BoutiqueOutput;
 use App\Entity\Boutique;
 use App\Entity\BoutiqueSettings;
+use App\Entity\User;
+use App\Entity\UserShop;
 use App\Enum\BoutiqueStatus;
 use App\Repository\BoutiqueRepository;
+use App\Repository\UserRepository;
 use App\Security\BoutiqueContext;
 use App\Service\Boutique\ReservedSlugRegistry;
 use App\Service\Auth\KeycloakRedirectUriSynchronizer;
 use App\Service\Notification\BackofficeNotificationService;
 use App\Service\NotificationService;
+use App\Service\Subscription\AccountSubscriptionService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -34,6 +38,8 @@ final class BoutiqueProcessor implements ProcessorInterface
         private readonly ReservedSlugRegistry $reservedSlugs,
         private readonly NotificationService $notificationService,
         private readonly KeycloakRedirectUriSynchronizer $keycloakRedirectUris,
+        private readonly AccountSubscriptionService $accountSubscriptions,
+        private readonly UserRepository $users,
         private readonly LoggerInterface $logger,
         private readonly string $rootDomain,
     ) {
@@ -95,17 +101,53 @@ final class BoutiqueProcessor implements ProcessorInterface
             }
         } else {
             $this->validateSlug($data->slug);
-            $entity = new Boutique($data->name, $data->slug);
-            $this->applyInput($entity, $data);
-            $entity->setStatus($isSuperAdmin ? BoutiqueStatus::Active : BoutiqueStatus::Pending);
-            $this->em->persist($entity);
+
+            $user = $this->resolveCurrentUser();
+            if (!$isSuperAdmin) {
+                $this->assertCanCreateBoutique($user);
+            }
+
+            $entity = $this->em->wrapInTransaction(function () use ($data, $user, $isSuperAdmin): Boutique {
+                $entity = new Boutique($data->name, $data->slug);
+                $entity->setOwner($user);
+                $this->applyInput($entity, $data);
+                $entity->setStatus($isSuperAdmin ? BoutiqueStatus::Active : BoutiqueStatus::Pending);
+                $this->em->persist($entity);
+
+                if (!$isSuperAdmin) {
+                    $user->addAdministeredBoutique($entity);
+                    $userShop = new UserShop(
+                        user: $user,
+                        boutique: $entity,
+                        role: 'ROLE_BOUTIQUE_ADMIN',
+                        status: \App\Enum\UserStatus::Active,
+                        createdBy: (string) $user->getId(),
+                    );
+                    $this->em->persist($userShop);
+                }
+
+                return $entity;
+            });
+
             $this->notificationService->notify(null, 'boutique_created', 'Nouvelle boutique', sprintf('La boutique "%s" a été créée avec le statut %s.', $entity->getName(), $entity->getStatus()->value), $entity);
+            $this->syncKeycloakRedirectUris($entity);
+
+            return $this->toOutput($entity);
         }
 
         $this->em->flush();
         $this->syncKeycloakRedirectUris($entity);
 
         return $this->toOutput($entity);
+    }
+
+    private function assertCanCreateBoutique(User $user): void
+    {
+        $cap = $this->accountSubscriptions->getBoutiqueCreationCap($user);
+        $owned = $this->accountSubscriptions->getOwnedBoutiqueCount($user);
+        if ($owned >= $cap) {
+            throw new ConflictHttpException(sprintf('Vous avez atteint la limite de création de %d boutique(s). Publiez ou archivez des boutiques existantes, ou augmentez votre abonnement.', $cap));
+        }
     }
 
     private function syncKeycloakRedirectUris(Boutique $boutique): void
@@ -169,12 +211,42 @@ final class BoutiqueProcessor implements ProcessorInterface
 
     private function publishBoutique(Boutique $entity, ?string $reason = null): void
     {
+        if (!$this->context->isSuperAdmin()) {
+            $user = $this->resolveCurrentUser();
+            $owner = $entity->getOwner();
+
+            if (!$owner instanceof User || (string) $owner->getId() !== (string) $user->getId()) {
+                throw new AccessDeniedHttpException('Seul le propriétaire de la boutique peut la publier.');
+            }
+
+            if (null === $entity->getApprovedAt()) {
+                throw new ConflictHttpException('Cette boutique doit d’abord être approuvée par le Super Admin avant publication.');
+            }
+
+            $max = $this->accountSubscriptions->getMaxBoutiques($user);
+            if (null !== $max) {
+                $published = $this->repository->countPublishedByOwner($owner);
+                if ($published >= $max) {
+                    throw new ConflictHttpException(sprintf('Vous avez atteint la limite de %d boutique(s) publiée(s) autorisée(s) par votre abonnement. Activez une extension pour en publier davantage.', $max));
+                }
+            }
+        }
+
         $entity->publish();
         $this->notifyAdmins($entity, 'boutique.published', 'Boutique publiée', sprintf('La boutique "%s" est maintenant publique.%s', $entity->getName(), $reason ? ' Motif : '.$reason : ''), $reason);
     }
 
     private function unpublishBoutique(Boutique $entity, ?string $reason = null): void
     {
+        if (!$this->context->isSuperAdmin()) {
+            $user = $this->resolveCurrentUser();
+            $owner = $entity->getOwner();
+
+            if (!$owner instanceof User || (string) $owner->getId() !== (string) $user->getId()) {
+                throw new AccessDeniedHttpException('Seul le propriétaire de la boutique peut la dépublier.');
+            }
+        }
+
         $entity->unpublish();
         $this->notifyAdmins($entity, 'boutique.unpublished', 'Boutique dépubliée', sprintf('La boutique "%s" n’est plus publique.%s', $entity->getName(), $reason ? ' Raison : '.$reason : ''), $reason);
     }
@@ -281,6 +353,21 @@ final class BoutiqueProcessor implements ProcessorInterface
     private function invalidateCache(string ...$slugs): void
     {
         // Cache invalidation is handled via BoutiqueCacheSubscriber (Doctrine postUpdate/postRemove)
+    }
+
+    private function resolveCurrentUser(): User
+    {
+        $identifier = $this->context->getUserIdentifier();
+        if (null === $identifier || '' === $identifier) {
+            throw new AccessDeniedHttpException('Utilisateur non authentifié.');
+        }
+
+        $user = $this->users->findOneBy(['identifier' => $identifier]);
+        if (!$user instanceof User) {
+            throw new AccessDeniedHttpException('Utilisateur introuvable.');
+        }
+
+        return $user;
     }
 
     private function findBoutique(string $id): Boutique

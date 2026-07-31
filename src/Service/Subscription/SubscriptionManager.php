@@ -138,7 +138,11 @@ final readonly class SubscriptionManager
                     $unlimited = true;
                 } else {
                     $baseLimit = $limitMap[$quotaCode];
+                    $unlimited = false;
                 }
+            } elseif ('max_boutiques' === $quotaCode) {
+                // Align with AccountSubscriptionService: absent max_boutiques row = unlimited.
+                $unlimited = true;
             }
         }
 
