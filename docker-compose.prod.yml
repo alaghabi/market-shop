@@ -107,7 +107,9 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.3.2
     # Do not use --optimized on first boot; after a successful start you can switch back.
-    command: start
+    command: start --optimized --import-realm
+    volumes:
+      - ./etc/keycloak/realm-prod.json:/opt/keycloak/data/import/realm-prod.json:ro
     env_file:
       - ${PROD_ENV_FILE:-.env.prod}
     environment:

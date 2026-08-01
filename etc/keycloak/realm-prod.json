@@ -1,0 +1,31 @@
+{
+    "realm": "hanooti",
+    "enabled": true,
+    "displayName": "Hanooti Production",
+    "clients": [
+      {
+        "clientId": "hanooti-api",
+        "name": "Hanooti API",
+        "enabled": true,
+        "protocol": "openid-connect",
+        "bearerOnly": true,
+        "publicClient": false
+      },
+      {
+        "clientId": "hanooti-web",
+        "name": "Hanooti Web",
+        "enabled": true,
+        "protocol": "openid-connect",
+        "publicClient": true,
+        "standardFlowEnabled": true,
+        "redirectUris": [
+          "https://hanooti.shop/*",
+          "https://*.hanooti.shop/*"
+        ],
+        "webOrigins": [
+          "https://hanooti.shop",
+          "https://*.hanooti.shop"
+        ]
+      }
+    ]
+  }
